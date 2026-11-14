@@ -7,15 +7,20 @@ import { makeError } from '../providers/errors.mjs';
 
 export const CHATGPT_MODELS_URL = 'https://api.openai.com/v1/models';
 export const CHATGPT_RESPONSES_URL = 'https://api.openai.com/v1/responses';
-const MODEL = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$/;
-const MAX_CATALOG_BYTES = 256 * 1024;
+// OpenAI's ChatGPT catalog permits opaque slugs up to 200 characters. Accept
+// that documented shape while excluding control and bidi-format characters.
+const MODEL = /^[^\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]{1,200}$/u;
+const modelSlug = value => typeof value === 'string' && MODEL.test(value) && !!value.trim();
+const MAX_CATALOG_BYTES = 2 * 1024 * 1024;
+const MAX_MODELS = 2000;
 const MODEL_TIMEOUT_MS = 20_000;
 const RESPONSE_TIMEOUT_MS = 180_000;
 
-function fault(code, status = undefined) {
+function fault(code, status = undefined, catalogReason = undefined) {
   const err = new Error('ChatGPT plan: ' + code);
   err.code = code;
   if (Number.isInteger(status)) err.status = status;
+  if (catalogReason) err.catalogReason = catalogReason; // Fixed machine code only.
   return err;
 }
 function signalFor(signal, timeout) {
@@ -36,19 +41,23 @@ function providerError(code, status) {
   return makeError({ provider: 'openai', kind, status, code, retryable: false });
 }
 async function jsonLimited(response) {
-  if (!response?.body) throw fault('invalid_model_catalog');
+  if (!response?.body) throw fault('invalid_model_catalog', undefined, 'empty_response');
   let length = 0;
   const decoder = new TextDecoder();
   let text = '';
   try {
     for await (const bytes of response.body) {
       length += bytes.byteLength;
-      if (length > MAX_CATALOG_BYTES) throw fault('invalid_model_catalog');
+      if (length > MAX_CATALOG_BYTES) throw fault('invalid_model_catalog', undefined, 'response_too_large');
       text += decoder.decode(bytes, { stream: true });
     }
     text += decoder.decode();
-    return JSON.parse(text);
-  } catch { throw fault('invalid_model_catalog'); }
+  } catch (err) {
+    if (err?.catalogReason === 'response_too_large') throw err;
+    throw fault('invalid_model_catalog', undefined, 'unreadable_response');
+  }
+  try { return JSON.parse(text); }
+  catch { throw fault('invalid_model_catalog', undefined, 'invalid_json'); }
 }
 
 /**
@@ -79,14 +88,15 @@ export function createChatGPTDirect({ accessToken, fetchFn = globalThis.fetch } 
     }
     if (!response.ok) throw fault(statusError(response.status), response.status);
     const body = await jsonLimited(response);
-    if (!body || !Array.isArray(body.models) || body.models.length > 500) throw fault('invalid_model_catalog');
+    if (!body || !Array.isArray(body.models)) throw fault('invalid_model_catalog', undefined, 'unexpected_shape');
+    if (body.models.length > MAX_MODELS) throw fault('invalid_model_catalog', undefined, 'too_many_models');
     const seen = new Set();
     const catalog = [];
     for (const m of body.models) {
       if (!m || m.visibility !== 'list') continue;
-      if (typeof m.slug !== 'string' || !MODEL.test(m.slug) ||
+      if (!modelSlug(m.slug) ||
           typeof m.display_name !== 'string' || !m.display_name.trim() || m.display_name.length > 200) {
-        throw fault('invalid_model_catalog');
+        throw fault('invalid_model_catalog', undefined, 'invalid_visible_model');
       }
       if (!seen.has(m.slug)) {
         seen.add(m.slug);
@@ -100,7 +110,7 @@ export function createChatGPTDirect({ accessToken, fetchFn = globalThis.fetch } 
 
   async function* stream(req, { signal } = {}) {
     const model = req?.model;
-    if (typeof model !== 'string' || !MODEL.test(model)) {
+    if (!modelSlug(model)) {
       yield { type: 'error', error: providerError('invalid_model') };
       return;
     }

@@ -118,3 +118,14 @@ test('unavailable credential encryption cannot show sign-in controls', async () 
   assert.equal(action(rig, 'chatgpt-signin'), null);
   assert.equal(action(rig, 'chatgpt-use'), null);
 });
+
+
+test('safe model catalog diagnostic describes the failure without a second provider picker', async () => {
+  const rig = await pageRig({ state: READY, hash: 'provider', chatgpt: service({
+    models: async () => ({ ok: false, error: 'invalid_model_catalog', catalogReason: 'unexpected_shape' }),
+  }) });
+  await pickOpenAI(rig);
+  assert.match(rig.document.querySelector('#page').textContent, /Unexpected model response structure/);
+  assert.equal(action(rig, 'chatgpt-use'), null);
+  assert.ok(action(rig, 'chatgpt-retry-models'));
+});

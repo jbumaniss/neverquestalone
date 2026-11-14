@@ -126,8 +126,9 @@ test('interrupted or failed streams do not report a successful completion', asyn
 });
 
 test('invalid catalog entries and unsupported successful content types are rejected', async () => {
-  const invalid = fixture({ modelResponse: json({ models: [{ slug: '../bad', visibility: 'list', display_name: 'Bad' }] }) });
-  await assert.rejects(invalid.direct.listModels(), /invalid_model_catalog/);
+  const invalid = fixture({ modelResponse: json({ models: [{ slug: '\u0000bad', visibility: 'list', display_name: 'Bad' }] }) });
+  await assert.rejects(invalid.direct.listModels(), error =>
+    error.code === 'invalid_model_catalog' && error.catalogReason === 'invalid_visible_model');
   const wrong = fixture({ streamResponse: json({ message: 'not an event stream' }) });
   const events = await collect(wrong.direct.stream(request()));
   assert.equal(events.at(-1).error.code, 'invalid_response_stream');
@@ -157,4 +158,38 @@ test('subscription sharing limit mid-stream stays in the ChatGPT plan route', as
   const events = await collect(f.direct.stream(request()));
   assert.equal(events.at(-1).error.code, 'plan_usage_limited');
   assert.equal(f.calls.length, 2);
+});
+
+
+test('accepts OpenAI account-visible model slugs beyond the old 128-character whitelist', async () => {
+  const slug = 'future/' + 'a'.repeat(160) + '~preview';
+  const f = fixture({ modelResponse: json({ models: [
+    { slug, display_name: 'Future preview', visibility: 'list' },
+    { slug: 'ignore', visibility: 'hidden' },
+  ] }) });
+  assert.deepEqual(await f.direct.listModels(), [{ id: slug, name: 'Future preview' }]);
+  const events = await collect(f.direct.stream(request(slug)));
+  assert.equal(events.some(e => e.type === 'done'), true);
+  assert.equal(JSON.parse(f.calls.at(-1).options.body).model, slug);
+});
+
+test('explains an unexpected catalog shape without returning or logging response content', async () => {
+  const wrong = fixture({ modelResponse: json({ object: 'list', data: [{ id: 'a-private-model' }] }) });
+  await assert.rejects(wrong.direct.listModels(), error =>
+    error.code === 'invalid_model_catalog' && error.catalogReason === 'unexpected_shape' &&
+    !error.message.includes('a-private-model'));
+});
+
+test('invalid JSON has a safe fixed diagnostic code', async () => {
+  const invalid = fixture({ modelResponse: new Response('<secret>private-response</secret>', { status: 200 }) });
+  await assert.rejects(invalid.direct.listModels(), error =>
+    error.catalogReason === 'invalid_json' && !JSON.stringify(error).includes('private-response'));
+});
+
+test('accepts bounded catalogs larger than the previous 256 KiB cap', async () => {
+  const many = { models: Array.from({ length: 600 }, (_, i) =>
+    ({ slug: 'model-' + i, display_name: 'OpenAI Model ' + i, visibility: 'list', description: 'x'.repeat(512) })) };
+  const f = fixture({ modelResponse: json(many) });
+  const out = await f.direct.listModels();
+  assert.equal(out.length, 600);
 });

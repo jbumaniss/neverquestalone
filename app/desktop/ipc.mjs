@@ -565,7 +565,8 @@ export const HANDLERS = {
   chatgptStatus: { input: NONE, run: ctx => ctx.chatgpt?.status?.() ?? unsupported },
   chatgptModels: { input: NONE, run: ctx => ctx.chatgpt?.models?.() ?? unsupported },
   chatgptUse: {
-    input: obj({ model: { type: 'string', minLength: 1, maxLength: 128, pattern: /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$/ } }, ['model']),
+    input: obj({ model: { type: 'string', minLength: 1, maxLength: 200,
+      pattern: /^[^\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]{1,200}$/u } }, ['model']),
     prepare: async ctx => {
       const account = ctx.chatgpt?.status?.();
       if (account?.status !== 'connected' || account.sharing !== true) return { ok: false, error: 'sign_in_required' };

@@ -82,9 +82,19 @@ test('activation validates a selected model, requires consent and never exposes 
   assert.deepEqual(accepted.calls, ['use:gpt-test']);
   assert.match(accepted.dialogs[0].detail, /game context/);
   assert.match(accepted.dialogs[0].detail, /API keys are preserved/);
-  assert.equal((await accepted.ipc.call('chatgptUse', { model: '../bad' })).error, 'bad_input');
+  assert.equal((await accepted.ipc.call('chatgptUse', { model: '\u0000bad' })).error, 'bad_input');
+  assert.equal((await accepted.ipc.call('chatgptUse', { model: 'bad\u202Eslug' })).error, 'bad_input');
   assert.equal((await accepted.ipc.call('chatgptUse', { model: 'gpt-test', token: 'secret' })).error, 'bad_input');
   assert.equal((await accepted.ipc.call('chatgptUse', { model: 'gpt-test', auth: 'key' })).error, 'bad_input');
   assert.equal((await accepted.ipc.call('chatgptUse', { model: 'gpt-test', provider: 'anthropic' })).error, 'bad_input');
   assert.deepEqual(await accepted.ipc.call('chatgptAccessToken'), { ok: false, error: 'unknown_call' });
+});
+
+
+test('an opaque catalog model ID can be selected without accepting arbitrary credentials or modes', async () => {
+  const f = fixture();
+  const model = 'future/' + 'x'.repeat(160) + '~preview';
+  assert.deepEqual(await f.ipc.call('chatgptUse', { model }), { ok: true, model });
+  assert.deepEqual(f.calls, ['use:' + model]);
+  assert.equal((await f.ipc.call('chatgptUse', { model: model + 'x'.repeat(50) })).error, 'bad_input');
 });

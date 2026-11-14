@@ -2977,7 +2977,17 @@
       var reason = ['sign_in_required', 'plan_permission_denied', 'plan_usage_limited',
         'invalid_model_catalog', 'service_unavailable', 'cancelled'].indexOf(S.chatgptModels.error) >= 0
         ? ' (' + S.chatgptModels.error.replace(/_/g, ' ') + ')' : '';
-      return Y('chatgptModelsError') + (Number.isInteger(http) ? ' (HTTP ' + http + ')' : reason);
+      var explain = {
+        empty_response: Y('chatgptCatalogEmpty'),
+        response_too_large: Y('chatgptCatalogLarge'),
+        unreadable_response: Y('chatgptCatalogUnreadable'),
+        invalid_json: Y('chatgptCatalogJson'),
+        unexpected_shape: Y('chatgptCatalogShape'),
+        too_many_models: Y('chatgptCatalogLarge'),
+        invalid_visible_model: Y('chatgptCatalogEntry'),
+      };
+      return Y('chatgptModelsError') + (Number.isInteger(http) ? ' (HTTP ' + http + ')' : '') +
+        (explain[S.chatgptModels.catalogReason] ? ' ' + explain[S.chatgptModels.catalogReason] : reason);
     }
     return Y('chatgptNoModels');
   }

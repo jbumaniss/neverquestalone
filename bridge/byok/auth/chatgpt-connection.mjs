@@ -126,6 +126,10 @@ export function createChatGPTConnection({
           ok: false, error: allowed.has(err?.code) ? err.code : 'service_unavailable',
           ...(Number.isInteger(err?.status) && err.status >= 400 && err.status <= 599
             ? { httpStatus: err.status } : {}),
+          // Only explicit, bounded categories. Never include server responses or tokens.
+          ...(['empty_response', 'response_too_large', 'unreadable_response',
+            'invalid_json', 'unexpected_shape', 'too_many_models', 'invalid_visible_model']
+              .includes(err?.catalogReason) ? { catalogReason: err.catalogReason } : {}),
         };
       }
     },

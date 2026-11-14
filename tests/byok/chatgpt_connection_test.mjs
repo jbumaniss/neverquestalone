@@ -153,3 +153,17 @@ test('model discovery is account-scoped and returns no secrets to the UI', () =>
     ] }), { headers: { 'content-type': 'application/json' } });
   },
 }));
+
+
+test('catalog format diagnostics reveal only a fixed reason, not remote response content', () => fixture(async ({ make }) => {
+  const service = make();
+  await service.signIn();
+  const result = await service.models();
+  assert.deepEqual(result, { ok: false, error: 'invalid_model_catalog', catalogReason: 'unexpected_shape' });
+  assert.ok(!JSON.stringify(result).includes('private-catalog-response'));
+  assert.ok(!JSON.stringify(result).includes('secret-access'));
+}, {
+  fetchFn: async () => new Response(JSON.stringify({
+    object: 'list', data: [{ id: 'private-catalog-response' }],
+  }), { status: 200, headers: { 'content-type': 'application/json' } }),
+}));

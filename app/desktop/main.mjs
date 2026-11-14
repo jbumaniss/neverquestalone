@@ -31,7 +31,7 @@
 // Hardware acceleration is off: the settings page is static text, and with GPU
 // compositing its GPU process held about 520 MB beside the game (57 MB without;
 // systems plan Batch 5, SY-11).
-import { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, dialog, ipcMain, protocol, session, shell, clipboard, Notification, powerMonitor, crashReporter } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, dialog, ipcMain, protocol, session, shell, clipboard, Notification, powerMonitor, crashReporter, safeStorage } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -41,6 +41,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // other loads (src/launch-guard.mjs).
 import { NET_ENV, LOADER_FOUND } from './src/launch-guard.mjs';
 import { createIpc, registerIpc, createKeyStager, STATUS_CHANNEL, NAVIGATE_CHANNEL, storeName, finishLine, MAC_PANES, st } from './ipc.mjs';
+import { importBridge } from './src/bridge-module.mjs';
 import { STRINGS } from './src/strings.mjs';
 import { createShellLedger, installShellGuard, UPDATER_PARTITION, guardNetworkEnv, refuseLine, EXTRA_CA_ENV, loaderVariable } from './src/net-guard.mjs';
 import { SCHEME, CSP, schemePrivileges, createSchemeHandler, isAppPage, pageUrl, PAGE_URL } from './src/scheme.mjs';
@@ -216,6 +217,7 @@ let paused = false;
 let appState = null;
 let updater = null;
 let keys = null;
+let chatgpt = null;
 let ledger = null;
 let notices = null;
 let removeDataOnQuit = false;
@@ -721,8 +723,25 @@ async function start() {
       return { ok: true, status: { ...updaterShown, remind: false } };
     },
   };
+  // Sign-in runs solely in Electron main. The window receives status, never OAuth credentials.
+  // Self-tests and screenshots cannot open the user's browser or use the user's keychain.
+  if (!HEADLESS) {
+    try {
+      const { createChatGPTConnection } = await importBridge('bridge/byok/auth/chatgpt-connection.mjs');
+      chatgpt = createChatGPTConnection({
+        userData, encryption: safeStorage,
+        openBrowser: async url => {
+          const target = new URL(url);
+          if (target.origin !== 'https://auth.openai.com') throw new Error('Untrusted ChatGPT sign-in destination');
+          await shell.openExternal(target.href);
+        },
+      });
+    } catch {
+      log('ChatGPT sign-in is unavailable in this build');
+    }
+  }
   const ipc = createIpc({
-    api, keys, ledger, updater: ipcUpdater, appState,
+    api, keys, chatgpt, ledger, updater: ipcUpdater, appState,
     platform: process.platform,
     confirm: confirmNative,
     links: { open: openLinkUrl },

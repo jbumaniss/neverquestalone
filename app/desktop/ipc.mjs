@@ -560,6 +560,28 @@ export const HANDLERS = {
     },
   },
   providers: { input: NONE, run: ctx => ctx.api.providers() },
+  // ChatGPT OAuth is separate from OpenAI Platform API keys. The trusted main process
+  // owns the browser callback, encrypted credentials and any future plan-usage requests.
+  chatgptStatus: { input: NONE, run: ctx => ctx.chatgpt?.status() ?? unsupported },
+  chatgptSignIn: {
+    input: NONE,
+    confirm: () => ({
+      message: 'Sign in with ChatGPT?',
+      detail: 'Your system browser will open OpenAI sign-in. NeverQuestAlone will request permission to use eligible ChatGPT plan features. You can decline in your browser.',
+      okLabel: 'Continue', cancelLabel: 'Cancel',
+    }),
+    run: ctx => ctx.chatgpt?.signIn() ?? unsupported,
+  },
+  chatgptCancelSignIn: { input: NONE, run: ctx => ctx.chatgpt?.cancelSignIn() ?? unsupported },
+  chatgptDisconnect: {
+    input: NONE,
+    confirm: () => ({
+      message: 'Disconnect ChatGPT?',
+      detail: 'This removes locally stored ChatGPT credentials. Your other AI providers and their keys are unchanged.',
+      okLabel: 'Disconnect', cancelLabel: 'Cancel', destructive: true,
+    }),
+    run: ctx => ctx.chatgpt?.disconnect() ?? unsupported,
+  },
   appInfo: { input: NONE, run: ctx => ctx.info() },
   notices: { input: NONE, run: ctx => ctx.notices() },
   appState: { input: NONE, run: ctx => ctx.appState.get() },

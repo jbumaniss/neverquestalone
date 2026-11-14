@@ -60,4 +60,6 @@ test('cancellation needs no confirmation and missing integration is unsupported'
   const missing = fixture({ chatgpt: {} });
   assert.equal((await missing.ipc.call('chatgptStatus')).error, 'unsupported');
   assert.equal((await missing.ipc.call('chatgptSignIn')).error, 'unsupported');
+  assert.equal((await missing.ipc.call('chatgptCancelSignIn')).error, 'unsupported');
+  assert.equal((await missing.ipc.call('chatgptDisconnect')).error, 'unsupported');
 });

@@ -135,6 +135,7 @@ import { CHAT_RE } from '../transport/records.mjs';
 import { loadManifests, createProvider, userLine, retryPlan, resolveModel, manifestFor, effortLevels, thinkRoom, outputCeiling, EFFORT_LEVELS, THINK_ROOM, DEFAULT_TIMEOUTS } from './providers/index.mjs';
 import { makeError, errorLogFields, cleanRequestId } from './providers/errors.mjs';
 import { createChatGPTBackendProvider } from './auth/chatgpt-backend-provider.mjs';
+import { isChatGPTModelId } from './auth/chatgpt-direct.mjs';
 import { loadPack, personaName } from './runtime/pack.mjs';
 import { FILES as MEMORY_FILES, MEMORY_DIR, charKey } from './runtime/logbook.mjs';
 import { createUsageHistory } from './usage/history.mjs';
@@ -591,10 +592,23 @@ export function createLocalBackend(handlers = {}, opts = {}) {
   function setChatModel(chatId, v) {
     if (!CHAT_RE.test(String(chatId ?? ''))) throw badRequest('chatId must be a chat id');
     const want = v === null || v === undefined || (typeof v === 'string' && v.trim().toLowerCase() === 'default') ? null : v;
-    if (want !== null && (typeof want !== 'string' || !MODEL_ID_RE.test(want) || looksLikeKey(want))) return { ok: false, error: 'bad_model' };
+    const subscription = settings.provider === 'openai' && settings.auth === 'oauth';
+    if (want !== null && (!(subscription ? isChatGPTModelId(want) : MODEL_ID_RE.test(want)) || looksLikeKey(want))) {
+      return { ok: false, error: 'bad_model' };
+    }
     let p;
     try { p = current(); } catch { return { ok: false, error: 'unknown_model' }; }
-    if (want !== null && !modelOffered(p.manifest, want)) {
+    // Subscription accounts expose a model catalog different from the
+    // Platform API's manifest. This command is synchronous, so consult only
+    // the already verified account catalog; never guess or switch to a key.
+    const offered = subscription ? (() => {
+      try {
+        const client = typeof opts.chatgpt === 'function' ? opts.chatgpt() : null;
+        const available = client?.cachedModels?.();
+        return Array.isArray(available) && available.some(m => m?.id === want);
+      } catch { return false; }
+    })() : modelOffered(p.manifest, want);
+    if (want !== null && !offered) {
       log('byok-chat-model', { chat: chatId, provider: p.id, refused: 'unknown_model' });
       return { ok: false, error: 'unknown_model' };
     }
@@ -701,7 +715,11 @@ export function createLocalBackend(handlers = {}, opts = {}) {
           return { ok: false };
         }
         modelCheck = { at: clock(), ok: true, models: r.models.length };
-        const res = resolveModel(p.manifest, r.models, p.model);
+        // Account models are authoritative for OAuth. Platform model defaults
+        // must never be used as a replacement under subscription billing.
+        const res = p.id === 'openai' && settings.auth === 'oauth'
+          ? { model: r.models.includes(p.model) ? p.model : null, switched: false }
+          : resolveModel(p.manifest, r.models, p.model);
         if (res.model && !res.switched) {
           log('byok-model-check', { reason, provider: p.id, model: p.model, available: true });
           if (notice?.kind === 'model_retired' && notice.model === p.model) notice = null;

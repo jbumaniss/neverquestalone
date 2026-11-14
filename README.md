@@ -72,7 +72,8 @@ The app is free, and NeverQuestAlone sets no limits of its own. You pay your AI 
 
 | AI | What you need | Cost |
 |---|---|---|
-| **Claude, ChatGPT, Grok or Gemini** | An API key from Anthropic, OpenAI, xAI or Google, with a few dollars of credit | Pay as you go (example below) |
+| **Claude, ChatGPT via API key, Grok or Gemini** | An API key from Anthropic, OpenAI, xAI or Google, with credit | Pay as you go (example below) |
+| **ChatGPT plan** | Sign in with your ChatGPT account in NeverQuestAlone (OpenAI → ChatGPT plan) | Included within eligible plan usage limits; no separate Platform API-key charge |
 | **Other: an OpenAI-compatible service** | Its address, a key if it takes one, and a model’s name (OpenRouter, Groq, Together and others) | That service’s prices |
 | **Other: a model on your computer** | Ollama (`http://localhost:11434/v1`) or LM Studio (`http://localhost:1234/v1`) with a model downloaded | Free. What you ask stays on your computer. The model shares your graphics card with the game |
 | **Other: a model on your home network** | Ollama or LM Studio on another computer at home, by its address (like `http://192.168.1.20:11434/v1`) | Free. What you ask goes only to that computer |
@@ -81,7 +82,7 @@ The app is free, and NeverQuestAlone sets no limits of its own. You pay your AI 
 
 On Claude Sonnet 5.5, Claude’s default, 40 replies a day cost about $0.76–1.22, so $5 of credit lasts 4 to 7 days. That’s about 1.9–3.0¢ a reply. The app shows your real figures.
 
-**A Claude, ChatGPT, Gemini or Grok subscription isn’t an API key.** Only API keys work.
+**Subscriptions are not API keys.** ChatGPT plan sign-in is available as a separate OpenAI authorization mode. Claude, Gemini and Grok currently use API keys. The app never silently changes from a plan to a Platform API key.
 
 **Set a spend limit at your AI company.** It’s what stops a runaway bill or a leaked key, and the app links to the right page. When you reach it, you get one line in game, like “You’ve reached the spend limit you set at Anthropic.”
 
@@ -91,7 +92,7 @@ On Claude Sonnet 5.5, Claude’s default, 40 replies a day cost about $0.76–1.
 
 - **Nothing goes to us.** There’s no NeverQuestAlone account, server, analytics or tracking.
 - **Your messages and game data go only to the AI you pick.** Your character’s name, realm and guild stay out unless you turn them on.
-- **Your key stays on your computer**, in your macOS Keychain or Windows Credential Manager, and goes only to its own AI company.
+- **Your API key stays on your computer**, in your macOS Keychain or Windows Credential Manager, and goes only to its own AI company. ChatGPT plan credentials are stored separately, encrypted with the operating system's secure storage, and are not sent to the window.
 - **Your chat history stays on your computer.** The app deletes its copy after 30 days, and you can change that. The addon keeps each chat’s last 200 replies and messages in WoW’s saved files until you delete the chat in game or uninstall with the addon.
 - **You can see everything.** On the app’s Your data page, Last request shows exactly what was sent, and Connections lists every address the app talked to.
 

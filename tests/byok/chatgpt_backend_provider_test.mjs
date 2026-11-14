@@ -40,3 +40,23 @@ test('model discovery errors and streaming failures return sanitized provider er
   assert.equal(events[0].error.code, 'subscription_unavailable');
   assert.equal(JSON.stringify(events).includes('private-token!'), false);
 });
+
+
+test('subscription provider forwards the existing request audit hook and stream lifecycle unchanged', async () => {
+  const calls = [];
+  const provider = createChatGPTBackendProvider(() => ({
+    ...service,
+    async *streamResponse(req, { onRequest }) {
+      onRequest({ method: 'POST', url: 'https://api.openai.com/v1/responses',
+        headers: { authorization: '(redacted)' }, body: { model: req.model } });
+      yield { type: 'start', requestId: 'req-123' };
+      yield { type: 'reasoning' };
+      yield { type: 'text', delta: 'Done' };
+      yield { type: 'done', finish: 'stop' };
+    },
+  }));
+  const events = await collect(provider.stream({ model: 'gpt-a' }, { onRequest: r => calls.push(r) }));
+  assert.deepEqual(events.map(e => e.type), ['start', 'reasoning', 'text', 'done']);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].headers.authorization, '(redacted)');
+});

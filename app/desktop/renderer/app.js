@@ -1892,6 +1892,12 @@
             : S.chatgpt && S.chatgpt.status === 'connected' ? 'oauth' : 'key')
           : null;
         if (where === 'ai') saveSetup();
+        // Start account model discovery from the user's selection, not from
+        // rendering a card. The request runs independently of the UI redraw.
+        if (id === 'openai' && st.authMode === 'oauth' && S.chatgpt?.status === 'connected' &&
+            S.chatgpt.sharing && !S.chatgptModels && !S.chatgptModelsBusy) {
+          loadChatGPTModels();
+        }
         rerender(false, function () { focusEl(document.getElementById('choice-' + id)); });
       }));
   }
@@ -3024,7 +3030,6 @@
     var statusLine = !c || c.ok === false ? Y('chatgptUnavailable')
       : connected ? c.sharing ? Y('chatgptConnected') : Y('chatgptPermissionMissing')
         : c.status === 'reauth_required' ? Y('chatgptReauth') : Y('chatgptDisconnected');
-    if (connected && c.sharing && !S.chatgptModels && !S.chatgptModelsBusy) loadChatGPTModels();
     var actions = [];
     if (S.chatgptBusy) {
       actions.push(small(Y('chatgptCancel'), function () {
@@ -3107,8 +3112,24 @@
   }
 
   PAGES.provider = function () {
-    return Promise.all([ensureProviders(), B.usage({ days: 1 }), B.caps(), B.chatgptStatus()]).then(function (res) {
-      S.chatgpt = res[3] && res[3].error !== 'unsupported' ? res[3] : null;
+    // The first page paint needs local settings, not account/session I/O.
+    // Load account status once and update the page when it arrives.
+    if (!S.chatgpt && !S.chatgptStatusBusy) {
+      S.chatgptStatusBusy = true;
+      B.chatgptStatus().then(function (status) {
+        S.chatgpt = status && status.error !== 'unsupported' ? status : { ok: false, error: 'unsupported' };
+      }, function () {
+        S.chatgpt = { ok: false, error: 'service_unavailable' };
+      }).then(function () {
+        S.chatgptStatusBusy = false;
+        if ((P().provider || {}).auth === 'oauth' && S.chatgpt?.status === 'connected' &&
+            S.chatgpt.sharing && !S.chatgptModels && !S.chatgptModelsBusy) {
+          loadChatGPTModels();
+        }
+        if (S.page === 'provider') rerender(false);
+      });
+    }
+    return Promise.all([ensureProviders(), B.usage({ days: 1 }), B.caps()]).then(function (res) {
       var u = isErr(res[1]) ? {} : res[1];
       var caps = isErr(res[2]) ? null : res[2];
       var p = P();
@@ -3185,8 +3206,6 @@
       var models = offeredModels(cur.id);
       if (custom) modelRow = h('div', { class: 'set set-bare-row', id: 'model-row', 'data-key': 'set-model' }, data('span', { class: 'set-main mono', text: F.clean(cur.model, 60) }));
       else if (oauth && !models.length) {
-        if (S.chatgpt && S.chatgpt.status === 'connected' && S.chatgpt.sharing &&
-            !S.chatgptModels && !S.chatgptModelsBusy) loadChatGPTModels();
         modelRow = stackRow('model-unavailable', Y('modelLabel'),
           h('span', { class: 'set-sub', text: modelDiscoveryLine() }),
           small(Y('chatgptRetryModels'), loadChatGPTModels, { fk: 'chatgpt-retry-models' }), 'set-rec');

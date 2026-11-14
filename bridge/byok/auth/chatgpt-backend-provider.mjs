@@ -33,6 +33,13 @@ export function createChatGPTBackendProvider(getChatGPT) {
           .filter(m => typeof m?.id === 'string').map(m => m.id) };
       } catch { return { ok: false, error: issue('model_discovery_failed', 'unknown') }; }
     },
+    async reach(options = {}) {
+      const client = connection(getChatGPT);
+      if (!ready(client)) return { ok: false, error: issue('sign_in_required') };
+      try { return typeof client.reach === 'function'
+        ? await client.reach(options) : { ok: false, error: issue('subscription_unavailable', 'unknown') };
+      } catch { return { ok: false, error: issue('subscription_unavailable', 'unknown') }; }
+    },
     async *stream(req, options = {}) {
       const client = connection(getChatGPT);
       if (!ready(client)) {

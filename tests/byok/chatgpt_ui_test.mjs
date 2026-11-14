@@ -145,3 +145,16 @@ test('OpenAI ChatGPT plan reuses Claude Thinking segmented control for supported
   await rig.press(action(rig, 'chatgpt-use'));
   assert.deepEqual(chosen, { model: 'gpt-6.1-sol', effort: 'high' });
 });
+
+
+test('Your AI paints before a slow account-status lookup finishes', async () => {
+  let resolveStatus;
+  const pending = new Promise(resolve => { resolveStatus = resolve; });
+  const rig = await pageRig({ state: READY, hash: 'provider', chatgpt: service({
+    status: () => pending,
+  }) });
+  assert.ok(action(rig, 'change-ai'), 'local controls render before ChatGPT status');
+  resolveStatus({ ok: true, status: 'connected', sharing: true });
+  await rig.settle(10);
+  assert.ok(action(rig, 'change-ai'));
+});

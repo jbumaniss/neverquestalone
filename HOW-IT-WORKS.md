@@ -28,7 +28,7 @@ flowchart LR
 - **The parts** are 200 small addons, NeverQuestAlone Part 001 to Part 200 (folders `NQA_S001` to `NQA_S200`). Each one holds one reply at a time. The AddOns list folds them under NeverQuestAlone Parts: leave them checked.
 - **The app** sits in your menu bar or system tray. It holds your settings and your key, talks to your AI company, and keeps your chat history on your computer.
 - **The capture helper** is a small program the app runs while Screen reading is on. It reads only while WoW is open, only the top of the game window, where the addon draws, and it has no network code.
-- **Your AI:** Claude, ChatGPT, Grok or Gemini with your own key from Anthropic, OpenAI, xAI or Google; or Other: any OpenAI-compatible service at its own address (OpenRouter, Groq, Together, or Ollama or LM Studio on your own computer or another one at home), with its key if it takes one.
+- **Your AI:** Claude, ChatGPT, Grok or Gemini with your own key from Anthropic, OpenAI, xAI or Google; ChatGPT also supports a separate account sign-in mode (OpenAI → ChatGPT plan); or Other: any OpenAI-compatible service at its own address (OpenRouter, Groq, Together, or Ollama or LM Studio on your own computer or another one at home), with its key if it takes one.
 
 ## One message, start to finish
 
@@ -170,3 +170,11 @@ NeverQuestAlone is built on [chelinho139/wow-ai](https://github.com/chelinho139/
 ---
 
 World of Warcraft, Warcraft and Blizzard Entertainment are trademarks or registered trademarks of Blizzard Entertainment, Inc. in the U.S. and/or other countries. NeverQuestAlone is unofficial and is not affiliated with or endorsed by Blizzard Entertainment, Anthropic, OpenAI, Google, xAI or OpenRouter. Other names are the trademarks of their owners and are used only to say which service you can connect.
+
+## ChatGPT plan authentication
+
+On **Your AI → Switch → OpenAI**, select **ChatGPT plan** rather than **API key**. Authorization opens OpenAI's website in the system browser and returns through a temporary loopback callback with PKCE. The connection keeps its credentials in OS-encrypted files accessible only to the trusted Electron main process. Inference uses OpenAI's ChatGPT plan route and the existing provider event and model/Thinking UI contracts.
+
+The shared Connections guard allows only OpenAI authentication and model endpoints. The app never sends the saved Platform API key when ChatGPT plan mode is active, and will not silently fall back to API-key billing. If account usage limits or permission prevent sending, the reply fails in that mode. The model catalog is account-specific. NeverQuestAlone retains request diagnostics with redacted authorization headers and does not write the account access token to Last Request.
+
+Switching OpenAI back to API key mode uses the existing Platform provider and stored key. Other providers are unchanged.

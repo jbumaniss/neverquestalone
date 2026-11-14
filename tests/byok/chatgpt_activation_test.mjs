@@ -158,3 +158,49 @@ test('ChatGPT Thinking reuses the manifest levels, defaults to Medium, and rejec
   assert.deepEqual(openai.models[0].efforts, ['low', 'medium', 'high', 'xhigh', 'max']);
   assert.equal(openai.models[0].priceHint, null, 'subscription UI must not show Platform token pricing');
 });
+
+
+test('per-chat ChatGPT model selection uses only the verified subscription catalog', async t => {
+  const dataDir = tmpDir('nqa-chatgpt-chat-model-');
+  t.after(() => fs.rmSync(dataDir, { recursive: true, force: true }));
+  const slug = 'future/' + 'x'.repeat(90) + '~preview';
+  const account = makeAccount({
+    cachedModels: () => [{ id: slug, name: 'Future preview' }, { id: 'gpt-test', name: 'GPT Test' }],
+    models: async () => ({ ok: true, models: [{ id: slug }, { id: 'gpt-test' }] }),
+  });
+  const backend = createLocalBackend({}, {
+    config: configWithDefaults({ byok: { provider: 'openai', model: 'gpt-test', auth: 'oauth' } }),
+    dataDir, keystore: createKeyStore({ backend: 'memory' }), chatgpt: () => account,
+    manifests: loadManifests(), checks: { models: false },
+  });
+  try {
+    await backend.start();
+    assert.deepEqual(backend.setChatModel(CHAT, slug), { ok: true, model: slug });
+    assert.equal(backend.chatSlot(CHAT).model, slug);
+    assert.deepEqual(backend.setChatModel(CHAT, 'gpt-6-astra'),
+      { ok: false, error: 'unknown_model' }, 'API-key-only model is not offered to this account');
+    assert.deepEqual(backend.setChatModel(CHAT, '\u0000forged'),
+      { ok: false, error: 'bad_model' });
+    assert.deepEqual(backend.setChatModel(CHAT, null), { ok: true, model: null });
+  } finally { await backend.stop(); }
+});
+
+test('expired account model never switches automatically to a Platform API model', async t => {
+  const dataDir = tmpDir('nqa-chatgpt-retired-model-');
+  t.after(() => fs.rmSync(dataDir, { recursive: true, force: true }));
+  const account = makeAccount({
+    models: async () => ({ ok: true, models: [{ id: 'gpt-test', name: 'GPT Test' }] }),
+  });
+  const backend = createLocalBackend({}, {
+    config: configWithDefaults({ byok: { provider: 'openai', model: 'gpt-6.1-sol', auth: 'oauth' } }),
+    dataDir, keystore: createKeyStore({ backend: 'memory' }), chatgpt: () => account,
+    manifests: loadManifests(),
+  });
+  try {
+    await backend.start();
+    const checked = await backend.checkModel();
+    assert.equal(checked?.switched, false);
+    assert.equal(backend.slotExtras().bridge.provider.model, 'gpt-6.1-sol');
+    assert.equal(backend.slotExtras().bridge.provider.auth, 'oauth');
+  } finally { await backend.stop(); }
+});

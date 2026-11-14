@@ -216,3 +216,100 @@ test('Thinking Off is translated to reasoning.none; unsupported values never rea
   assert.equal(events[0].error.code, 'invalid_reasoning_effort');
   assert.equal(invalid.calls.length, 0);
 });
+
+
+test('ChatGPT streaming follows the shared start, request-audit and reasoning event contract', async () => {
+  const stream = sse([
+    'event: response.output_item.added',
+    'data: {"type":"response.output_item.added","item":{"type":"reasoning"}}',
+    '',
+    'event: response.output_text.delta',
+    'data: {"type":"response.output_text.delta","delta":"Answer"}',
+    '',
+    'event: response.completed',
+    'data: {"type":"response.completed","response":{"usage":{"input_tokens":12,"output_tokens":7}}}',
+    '', '',
+  ].join('\n'));
+  const f = fixture({ streamResponse: stream });
+  const requests = [];
+  const events = await collect(f.direct.stream(request(), {
+    onRequest: r => { requests.push(r); },
+  }));
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0], {
+    method: 'POST', url: CHATGPT_RESPONSES_URL,
+    headers: { authorization: '(redacted)', 'content-type': 'application/json', accept: 'text/event-stream' },
+    body: { model: 'gpt-test',
+      input: [{ role: 'user', content: 'Where is my quest?' }],
+      instructions: 'Keep answers short.', store: false, stream: true },
+  });
+  assert.equal(events[0].type, 'start');
+  assert.ok(events.some(x => x.type === 'reasoning'), 'backend must see reasoning started');
+  assert.equal(events.some(x => x.type === 'thinking'), false);
+  assert.equal(events.find(x => x.type === 'text')?.delta, 'Answer');
+  assert.equal(events.at(-1).type, 'done');
+  assert.equal(JSON.stringify({ events, requests }).includes('test-only-oauth-token'), false);
+});
+
+test('a failed response after HTTP 200 is recorded as started and is never marked done', async () => {
+  const f = fixture({ streamResponse: sse('event: response.failed\n' +
+    'data: {"type":"response.failed","response":{"error":{"message":"do-not-log-token"}}}\n\n') });
+  const events = await collect(f.direct.stream(request()));
+  assert.equal(events[0].type, 'start');
+  assert.equal(events.at(-1).type, 'error');
+  assert.equal(events.some(e => e.type === 'done'), false);
+  assert.equal(JSON.stringify(events).includes('do-not-log-token'), false);
+});
+
+test('diagnostic request hook errors never interrupt the ChatGPT response', async () => {
+  const f = fixture();
+  const events = await collect(f.direct.stream(request(), {
+    onRequest: () => { throw Error('UI not open'); },
+  }));
+  assert.equal(events.at(-1).type, 'done');
+});
+
+
+test('blocked network requests preserve the existing egress policy error kind', async () => {
+  const makeRefusal = code => new TypeError('fetch failed', {
+    cause: Object.assign(new Error('blocked'), { code }),
+  });
+  const modelsDenied = createChatGPTDirect({
+    accessToken: async () => 'test-only-oauth-token',
+    fetchFn: async () => { throw makeRefusal('EGRESS_BLOCKED'); },
+  });
+  await assert.rejects(modelsDenied.listModels(),
+    err => err.code === 'egress_blocked' && err.egressCode === 'EGRESS_BLOCKED');
+  const f = createChatGPTDirect({
+    accessToken: async () => 'test-only-oauth-token',
+    fetchFn: async url => {
+      if (url === CHATGPT_MODELS_URL) return json(catalog);
+      throw makeRefusal('EGRESS_STOPPED');
+    },
+  });
+  const events = await collect(f.stream(request()));
+  assert.equal(events.at(-1).error.kind, 'egress_blocked');
+  assert.equal(events.at(-1).error.code, 'EGRESS_STOPPED');
+  assert.equal(events.some(e => e.type === 'start'), false);
+});
+
+
+test('reach uses the shared provider contract and never sends an OAuth credential', async () => {
+  const f = fixture();
+  assert.deepEqual(await f.direct.reach(), { ok: true, status: 200 });
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].options.method, 'HEAD');
+  assert.equal(f.calls[0].options.headers, undefined);
+  assert.equal(f.calls[0].url, CHATGPT_MODELS_URL);
+});
+
+test('model discovery failure before a ChatGPT reply is retryable, never a Platform key fallback', async () => {
+  const f = createChatGPTDirect({
+    accessToken: async () => 'safe-model-token',
+    fetchFn: async () => { throw Error('offline'); },
+  });
+  const events = await collect(f.stream(request()));
+  assert.equal(events[0].error.kind, 'network_before_send');
+  assert.equal(events[0].error.retryable, true);
+  assert.equal(events[0].error.code, 'model_discovery_unavailable');
+});

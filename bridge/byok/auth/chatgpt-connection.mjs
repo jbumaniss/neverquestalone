@@ -7,23 +7,57 @@ import { exchangeChatGPTCode } from './chatgpt-tokens.mjs';
 import { createChatGPTStore } from './chatgpt-store.mjs';
 import { createChatGPTSessions } from './chatgpt-session.mjs';
 import { createChatGPTDirect } from './chatgpt-direct.mjs';
+import { EGRESS_BLOCKED, EGRESS_STOPPED } from '../providers/errors.mjs';
 
 const AUTHORIZE_ORIGIN = 'https://auth.openai.com';
 const SAFE_ERRORS = new Set(['busy', 'cancelled', 'storage_unavailable', 'open_browser_failed', 'sign_in_failed', 'multiple_accounts']);
 
 export function createChatGPTConnection({
   userData, encryption, openBrowser,
-  fetchFn = globalThis.fetch,
+  fetchFn = null,
   startCallback = startChatGPTCallback,
   exchangeCode = exchangeChatGPTCode,
 } = {}) {
   if (typeof userData !== 'string' || !path.isAbsolute(userData) ||
-      !encryption || typeof openBrowser !== 'function' || typeof fetchFn !== 'function') {
+      !encryption || typeof openBrowser !== 'function' ||
+      (fetchFn !== null && typeof fetchFn !== 'function')) {
     throw new TypeError('ChatGPT connection requires app data, OS encryption, a browser and fetch');
   }
   const folder = path.join(userData, 'chatgpt');
+  // Production traffic is attached to boot's guarded egress after the bridge
+  // starts. An absent or stopped guard fails closed. Tests may inject a fake fetch.
+  let egress = null;
+  let binding = null;
+  const HOSTS = new Set(['auth.openai.com', 'api.openai.com']);
+  async function request(input, options) {
+    if (fetchFn) return fetchFn(input, options);
+    const network = egress;
+    if (!network || network.stopped()) {
+      const error = new TypeError('ChatGPT guarded network unavailable');
+      error.cause = Object.assign(new Error('Shared network guard is stopped'), {
+        code: EGRESS_STOPPED,
+      });
+      throw error;
+    }
+    // Enforce the pinned destination before temporarily extending the
+    // existing Connections allowlist. Never send OAuth credentials to any
+    // third-party host, including hosts from a redirected URL.
+    let url;
+    try { url = new URL(typeof input === 'string' ? input : input?.url ?? input?.href); } catch { /* rejected below */ }
+    if (!url || url.protocol !== 'https:' || !HOSTS.has(url.hostname) ||
+        url.port || url.username || url.password) {
+      const error = new TypeError('ChatGPT destination rejected');
+      error.cause = Object.assign(new Error('ChatGPT only permits pinned OpenAI hosts'), {
+        code: EGRESS_BLOCKED,
+      });
+      throw error;
+    }
+    const release = network.widen([url.hostname], 'chatgpt');
+    try { return await network.fetch(input, options); }
+    finally { release(); }
+  }
   const store = createChatGPTStore({ directory: path.join(folder, 'credentials'), encryption });
-  const sessions = createChatGPTSessions({ store, fetchFn });
+  const sessions = createChatGPTSessions({ store, fetchFn: request });
   let busy = false;
   let listener = null;
 
@@ -39,7 +73,7 @@ export function createChatGPTConnection({
     if (!current) throw Object.assign(new Error('ChatGPT sign-in required'), { code: 'sign_in_required' });
     return sessions.ensureFresh(current.clientId);
   }
-  const direct = createChatGPTDirect({ accessToken: getAccessToken, fetchFn });
+  const direct = createChatGPTDirect({ accessToken: getAccessToken, fetchFn: request });
 
   function publicState() {
     const current = existing();
@@ -54,6 +88,22 @@ export function createChatGPTConnection({
   }
 
   return Object.freeze({
+    // Main-process/bridge capability only. The renderer never receives this.
+    // Only OpenAI's pinned hosts can be used. Individual requests temporarily
+    // widen the existing Connections guard, never the full app lifetime.
+    bindEgress(network) {
+      if (fetchFn || !network || typeof network.fetch !== 'function' ||
+          typeof network.widen !== 'function' || typeof network.stopped !== 'function' ||
+          network.stopped()) throw new TypeError('Active guarded egress required');
+      const id = Symbol('ChatGPT guarded network binding');
+      egress = network;
+      binding = id;
+      return () => {
+        if (binding !== id) return;
+        egress = null;
+        binding = null;
+      };
+    },
     status() {
       try { return publicState(); }
       catch (err) { return failure(err, err?.code === 'multiple_accounts' ? 'multiple_accounts' : 'storage_unavailable'); }
@@ -88,7 +138,7 @@ export function createChatGPTConnection({
         }
         const callback = await pending;
         const verified = await exchangeCode({
-          callback, transaction: tx, fetchFn,
+          callback, transaction: tx, fetchFn: request,
           ...(previous?.subject ? { expectedSubject: previous.subject } : {}),
         });
         const status = sessions.saveConnected({ clientId: callback.clientId, hostId, exchange: verified });
@@ -121,7 +171,7 @@ export function createChatGPTConnection({
       try { return { ok: true, models: await direct.listModels() }; }
       catch (err) {
         const allowed = new Set(['sign_in_required', 'plan_permission_denied',
-          'plan_usage_limited', 'invalid_model_catalog', 'service_unavailable', 'cancelled']);
+          'plan_usage_limited', 'invalid_model_catalog', 'service_unavailable', 'cancelled', 'egress_blocked']);
         return {
           ok: false, error: allowed.has(err?.code) ? err.code : 'service_unavailable',
           ...(Number.isInteger(err?.status) && err.status >= 400 && err.status <= 599
@@ -138,6 +188,11 @@ export function createChatGPTConnection({
     // Main-process-only APIs. Never attach either to renderer IPC.
     accessToken: getAccessToken,
     streamResponse: (req, opts) => direct.stream(req, opts),
-    close() { listener?.cancel(); },
+    reach: options => direct.reach(options),
+    close() {
+      listener?.cancel();
+      egress = null;
+      binding = null;
+    },
   });
 }

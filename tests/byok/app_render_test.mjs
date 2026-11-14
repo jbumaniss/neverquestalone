@@ -1243,9 +1243,10 @@ test('SY-04: screen reading that fails while WoW runs is one notice with its nex
 test('Settings (spec §6.7, trimmed in the app trim): three switches and Show more; every control saves on change (Saved., or That didn’t save. with Save again); no primary', async () => {
   const r = await pageRig({ state: READY, hash: 'settings' });
   assert.equal(titleText(r), 'Settings');
-  // The four switches a player changes (Automatic updates since 1.4.6), and one disclosure; no group headings (the app trim).
+  // Three switches and the personal fork's read-only update policy; no group headings.
   assert.equal(r.document.querySelectorAll('#page .group-title').length, 0, 'no group headings');
-  assert.deepEqual(r.document.querySelectorAll('#page .set-key').map(e => e.textContent), ['Start at login', 'Notifications', 'Automatic updates', 'Check-ins'], 'what Settings shows before a click');
+  assert.equal(r.document.getElementById('sw-auto-install'), null, 'no unattended-install toggle');
+  assert.deepEqual(r.document.querySelectorAll('#page .set-key').map(e => e.textContent), ['Start at login', 'Notifications', 'Manual updates only', 'Check-ins'], 'what Settings shows before a click');
   assert.equal(r.document.querySelector('#checkins-row .set-sub').textContent, 'Quest and level-up tips, billed as replies.', 'each tip costs a reply (CL-words-66, CL-player-51)');
   assert.ok(r.document.querySelectorAll('#page .set-sub').every(e => e.textContent.split(/\s+/).length <= 9), 'lines of 9 words or fewer');
   for (const gone of ['size-row', 'pv-echo', 'screen-row', 'history-row', 'memory-row', 'diag-row', 'updates-row', 'about-row', 'uninstall-row', 'setup-row']) assert.equal(r.document.getElementById(gone), null, `${gone}: not before a click`);

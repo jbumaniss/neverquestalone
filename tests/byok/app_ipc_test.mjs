@@ -921,7 +921,7 @@ test('app-state: defaults, normalization, owner-only atomic writes', () => {
     fs.writeFileSync(s.file, '{not json');
     assert.equal(createAppState(dir).get().onboarded, false, 'damaged → defaults');
     assert.deepEqual(normalizeState({ onboarded: 'yes', updates: { mode: 'sometimes', lastCheck: 'x' }, evil: 1 }), {
-      v: 1, onboarded: false, notifications: true, zoom: 0, updates: { mode: 'notify', auto: true, relaunchHidden: false, neverSince: null, lastReminder: null, lastCheck: null }, noticesSeen: [],
+      v: 1, onboarded: false, notifications: true, zoom: 0, updates: { mode: 'notify', auto: false, relaunchHidden: false, neverSince: null, lastReminder: null, lastCheck: null }, noticesSeen: [],
       defaultsSeen: false, alertsAsked: false, addonConsent: null, setup: null,
     });
     // Setup's saved screen (onboarding spec §3.11): v2, known screens and paths, no secrets.

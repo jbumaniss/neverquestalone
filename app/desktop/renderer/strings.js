@@ -738,7 +738,7 @@ window.BonesStrings = {
     loginHeldLine: 'macOS held it. Allow it in {loginPane}.',
     notificationsLabel: 'Notifications',
     autoUpdateLabel: 'Manual updates only',
-    autoUpdateLine: 'New releases are announced, but never downloaded or installed automatically. Build reviewed changes yourself.',
+    autoUpdateLine: 'Upstream releases are announced, never installed automatically.',
     checkInsLabel: 'Check-ins',
     checkInsLine: 'Quest and level-up tips, billed as replies.', // the quest work first (CL-words-60), and that each is billed (CL-words-66, CL-player-51)
     moreBtn: 'Show more', // the one disclosure: what protects you and the pages behind it (the app trim)

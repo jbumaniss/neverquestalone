@@ -1101,6 +1101,7 @@ test('personal fork: upstream releases notify but cannot download or install, ev
   assert.equal(events.fake.autoInstallOnAppQuit, false);
   events.handlers['update-available']({ version: '0.2.0' });
   assert.equal(notes.at(-1).page, 'about');
+  assert.equal(notes.at(-1).body, 'Review this release; your installed build will not change.');
   assert.equal(events.calls.download, 0);
   assert.deepEqual(await u.download(), { ok: false, error: 'notify_only' });
   assert.deepEqual(u.installNow(), { ok: false, error: 'notify_only' });

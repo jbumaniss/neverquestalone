@@ -722,13 +722,6 @@ async function start() {
       app, identity: IDENTITY, prefs, savePrefs, log, onChange: s => send(UPDATES_CHANNEL, s), notify: n => notifier.notify(n),
       // Personal fork: release checks are informational; upstream binaries are never installed.
       manualUpdatesOnly: true,
-      // Automatic updates install only while the game is closed and the window is shut.
-      idle: async () => {
-        if (win && !win.isDestroyed() && win.isVisible()) return false;
-        if (!api || typeof api.wowRunning !== 'function') return false;
-        try { return (await api.wowRunning())?.running === false; } catch { return false; }
-      },
-      beforeInstall: () => appState.saveUpdatesPrefs({ relaunchHidden: true }),
     });
 
   // The screenshot mode's About scenes show an installed app's updater (up to date, available, ready,

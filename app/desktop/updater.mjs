@@ -687,7 +687,7 @@ export async function startUpdater({
       emit();
       // Automatic: it downloads now and says so once it's ready (below); nothing to click.
       if (autoOn()) { timer.setTimeout(() => { ctl.download(); }, 0); return; }
-      notify({ title: `NeverQuestAlone ${st.available.version} is available.`, body: st.notifyOnly ? 'Get it from the download page.' : 'Click to open About, then click Download. It installs when you quit.', page: 'about' });
+      notify({ title: `NeverQuestAlone ${st.available.version} is available.`, body: manualUpdatesOnly ? 'Review this release; your installed build will not change.' : st.notifyOnly ? 'Get it from the download page.' : 'Click to open About, then click Download. It installs when you quit.', page: 'about' });
     });
     updater.on('update-not-available', () => { st.state = 'none'; emit(); });
     updater.on('download-progress', p => { st.state = 'downloading'; st.progress = Math.round(p?.percent ?? 0); emit(); });

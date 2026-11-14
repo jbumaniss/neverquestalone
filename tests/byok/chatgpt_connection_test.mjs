@@ -54,7 +54,7 @@ async function fixture(fn, overrides = {}) {
   });
   const make = () => createChatGPTConnection({
     userData: root, encryption: secure, openBrowser,
-    startCallback, exchangeCode, fetchFn: async () => { throw Error('unexpected remote request'); },
+    startCallback, exchangeCode, fetchFn: overrides.fetchFn ?? (async () => { throw Error('unexpected remote request'); }),
   });
   try { return await fn({ root, make, listeners, visits, exchangeCalls, secure }); }
   finally { fs.rmSync(root, { recursive: true, force: true }); }
@@ -132,3 +132,24 @@ test('refuses overlapping sign-ins and allows explicit cancellation', () => fixt
   listeners.push(listener);
   return listener;
 } }));
+
+
+test('model discovery is account-scoped and returns no secrets to the UI', () => fixture(async ({ make }) => {
+  const service = make();
+  assert.equal((await service.models()).error, 'sign_in_required');
+  await service.signIn();
+  const result = await service.models();
+  assert.deepEqual(result, { ok: true, models: [{ id: 'gpt-test', name: 'GPT Test' }] });
+  assert.ok(!JSON.stringify(result).includes('secret-access'));
+  service.disconnect();
+  assert.equal((await service.models()).error, 'sign_in_required');
+}, {
+  fetchFn: async (url, init) => {
+    assert.equal(url, 'https://api.openai.com/v1/models');
+    assert.equal(init.headers.authorization, 'Bearer secret-access');
+    assert.equal(init.redirect, 'error');
+    return new Response(JSON.stringify({ models: [
+      { slug: 'gpt-test', display_name: 'GPT Test', visibility: 'list' },
+    ] }), { headers: { 'content-type': 'application/json' } });
+  },
+}));

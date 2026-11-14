@@ -10,6 +10,7 @@ function fixture({ confirm = true, chatgpt = null } = {}) {
   };
   const mock = chatgpt ?? {
     status: () => ({ ok: true, status: 'connected', sharing: true, clientId: 'oaiapp_testclient123', subject: 'stable-subject' }),
+    models: () => ({ ok: true, models: [{ id: 'gpt-test', name: 'GPT Test' }] }),
     signIn: async () => { calls.push('signIn'); return { ok: true, status: 'connected', sharing: true }; },
     disconnect: () => { calls.push('disconnect'); return { ok: true, status: 'disconnected', sharing: false }; },
     cancelSignIn: () => { calls.push('cancelSignIn'); return { ok: true }; },
@@ -26,7 +27,7 @@ function fixture({ confirm = true, chatgpt = null } = {}) {
 }
 
 test('ChatGPT IPC methods have empty-input schemas and do not expose tokens', async () => {
-  for (const name of ['chatgptStatus', 'chatgptSignIn', 'chatgptCancelSignIn', 'chatgptDisconnect']) {
+  for (const name of ['chatgptStatus', 'chatgptModels', 'chatgptSignIn', 'chatgptCancelSignIn', 'chatgptDisconnect']) {
     assert.ok(HANDLERS[name], name);
     assert.equal(HANDLERS[name].input.type, 'none');
   }
@@ -34,6 +35,7 @@ test('ChatGPT IPC methods have empty-input schemas and do not expose tokens', as
   const status = await ipc.call('chatgptStatus');
   assert.equal(status.status, 'connected');
   assert.equal(status.sharing, true);
+  assert.deepEqual(await ipc.call('chatgptModels'), { ok: true, models: [{ id: 'gpt-test', name: 'GPT Test' }] });
   assert.ok(!JSON.stringify(status).includes('NEVER-RENDER'));
   assert.deepEqual(await ipc.call('chatgptAccessToken'), { ok: false, error: 'unknown_call' });
   assert.equal((await ipc.call('chatgptStatus', { token: true })).error, 'bad_input');
@@ -59,6 +61,7 @@ test('cancellation needs no confirmation and missing integration is unsupported'
   assert.deepEqual(conn.calls, ['cancelSignIn']);
   const missing = fixture({ chatgpt: {} });
   assert.equal((await missing.ipc.call('chatgptStatus')).error, 'unsupported');
+  assert.equal((await missing.ipc.call('chatgptModels')).error, 'unsupported');
   assert.equal((await missing.ipc.call('chatgptSignIn')).error, 'unsupported');
   assert.equal((await missing.ipc.call('chatgptCancelSignIn')).error, 'unsupported');
   assert.equal((await missing.ipc.call('chatgptDisconnect')).error, 'unsupported');

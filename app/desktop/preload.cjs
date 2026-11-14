@@ -12,7 +12,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const PREFIX = 'nqa:';
 const CALLS = [
-  'status', 'dismissNotice', 'providers', 'chatgptStatus', 'chatgptSignIn', 'chatgptCancelSignIn', 'chatgptDisconnect', 'appInfo', 'notices', 'appState', 'setAppState', 'setLoginItem',
+  'status', 'dismissNotice', 'providers', 'chatgptStatus', 'chatgptModels', 'chatgptSignIn', 'chatgptCancelSignIn', 'chatgptDisconnect', 'appInfo', 'notices', 'appState', 'setAppState', 'setLoginItem',
   'stageKey', 'dropStagedKey', 'testKey', 'deleteKey', 'connectCustom', 'choose',
   'caps', 'setCaps', 'privacy', 'setPrivacy',
   'usage', 'connections', 'lastRequest',

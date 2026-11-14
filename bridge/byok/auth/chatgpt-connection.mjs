@@ -6,6 +6,7 @@ import { startChatGPTCallback } from './chatgpt-loopback.mjs';
 import { exchangeChatGPTCode } from './chatgpt-tokens.mjs';
 import { createChatGPTStore } from './chatgpt-store.mjs';
 import { createChatGPTSessions } from './chatgpt-session.mjs';
+import { createChatGPTDirect } from './chatgpt-direct.mjs';
 
 const AUTHORIZE_ORIGIN = 'https://auth.openai.com';
 const SAFE_ERRORS = new Set(['busy', 'cancelled', 'storage_unavailable', 'open_browser_failed', 'sign_in_failed', 'multiple_accounts']);
@@ -32,6 +33,13 @@ export function createChatGPTConnection({
     const clientId = ids[0] ?? null;
     return clientId ? store.load(clientId) : null;
   }
+
+  async function getAccessToken() {
+    const current = existing();
+    if (!current) throw Object.assign(new Error('ChatGPT sign-in required'), { code: 'sign_in_required' });
+    return sessions.ensureFresh(current.clientId);
+  }
+  const direct = createChatGPTDirect({ accessToken: getAccessToken, fetchFn });
 
   function publicState() {
     const current = existing();
@@ -84,6 +92,7 @@ export function createChatGPTConnection({
           ...(previous?.subject ? { expectedSubject: previous.subject } : {}),
         });
         const status = sessions.saveConnected({ clientId: callback.clientId, hostId, exchange: verified });
+        direct.invalidateModels();
         return { ok: true, ...status };
       } catch (err) {
         return failure(err);
@@ -103,15 +112,22 @@ export function createChatGPTConnection({
       try {
         const current = existing();
         if (current) store.remove(current.clientId);
+        direct.invalidateModels();
         return { ok: true, status: 'disconnected', sharing: false };
       } catch (err) { return failure(err, err?.code === 'multiple_accounts' ? 'multiple_accounts' : 'storage_unavailable'); }
     },
-    // Main-process-only credential access for a future provider integration.
-    async accessToken() {
-      const current = existing();
-      if (!current) throw Object.assign(new Error('ChatGPT sign-in required'), { code: 'sign_in_required' });
-      return sessions.ensureFresh(current.clientId);
+    // Only verified model names and their IDs may be shared with a renderer.
+    async models() {
+      try { return { ok: true, models: await direct.listModels() }; }
+      catch (err) {
+        const allowed = new Set(['sign_in_required', 'plan_permission_denied',
+          'plan_usage_limited', 'invalid_model_catalog', 'service_unavailable', 'cancelled']);
+        return { ok: false, error: allowed.has(err?.code) ? err.code : 'service_unavailable' };
+      }
     },
+    // Main-process-only APIs. Never attach either to renderer IPC.
+    accessToken: getAccessToken,
+    streamResponse: (req, opts) => direct.stream(req, opts),
     close() { listener?.cancel(); },
   });
 }

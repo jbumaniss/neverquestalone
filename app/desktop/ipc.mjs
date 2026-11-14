@@ -563,6 +563,7 @@ export const HANDLERS = {
   // ChatGPT OAuth is separate from OpenAI Platform API keys. The trusted main process
   // owns the browser callback, encrypted credentials and any future plan-usage requests.
   chatgptStatus: { input: NONE, run: ctx => ctx.chatgpt?.status?.() ?? unsupported },
+  chatgptModels: { input: NONE, run: ctx => ctx.chatgpt?.models?.() ?? unsupported },
   chatgptSignIn: {
     input: NONE,
     confirm: () => ({

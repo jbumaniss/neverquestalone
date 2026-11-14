@@ -34,7 +34,9 @@ function fixture({ modelResponse = json(catalog), streamResponse = sse(completed
     fetchFn: async (url, options) => {
       calls.push({ url, options });
       if (url === CHATGPT_MODELS_URL) return modelResponse.clone();
-      if (url === CHATGPT_RESPONSES_URL) return streamResponse.clone();
+      // Cloning SSE makes an unused tee branch; the parser's early return can
+      // await cancellation of that branch forever under Node 22.
+      if (url === CHATGPT_RESPONSES_URL) return streamResponse;
       throw Error('unexpected network destination');
     },
   });

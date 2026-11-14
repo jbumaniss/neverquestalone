@@ -20,7 +20,7 @@ const PLAYER_TEXT = Object.fromEntries(loadManifests().map(m => [m.id, playerCar
  * store: the shell's settings as main keeps them across windows ({seen: [...]}, like app-state.json);
  * pass the same one to a second rig to open the window again after closing it.
  */
-export async function pageRig({ state = {}, onboarded = true, welcome = false, hash = '', confirm = true, apiMode = 'real', apiReason = null, pickFolder = null, platform = 'darwin', store = { seen: [] }, appState: initialAppState = {}, info = {}, clipboard = '', updater = null, releases = null } = {}) {
+export async function pageRig({ state = {}, onboarded = true, welcome = false, hash = '', confirm = true, apiMode = 'real', apiReason = null, pickFolder = null, platform = 'darwin', store = { seen: [] }, appState: initialAppState = {}, info = {}, clipboard = '', updater = null, releases = null, chatgpt = null } = {}) {
   const mock = createMockApi({ delayMs: 0, controllable: true, platform });
   mock.control.useLastErrorView(lastErrorView);
   mock.control.usePlayerText(PLAYER_TEXT);
@@ -36,6 +36,7 @@ export async function pageRig({ state = {}, onboarded = true, welcome = false, h
   const opened = [];
   const ctx = {
     api: new Proxy(api, { get: (t, k) => (typeof t[k] === 'function' ? (...a) => { calls.push([k, ...a]); return t[k](...a); } : t[k]) }),
+    chatgpt,
     keys: createKeyStager(),
     ledger: createShellLedger(),
     updater: updater ?? idleUpdater({ pkg: {}, prefs: {}, current: '0.1.0' }),

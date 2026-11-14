@@ -510,6 +510,7 @@
 
   var S = {
     status: null, info: null, appState: null, providers: null, updates: null,
+    chatgpt: null, chatgptBusy: false, chatgptCancelled: false, chatgptResult: null,
     page: null, demoDismissed: false, setup: null, keyFlow: null, ya: null, capsDraft: null, capsResult: null,
     lastChat: null, memChar: null, open: {}, noticeGone: {}, cardCheck: null, fuseSeen: false, screenSeen: null,
     pendingFocus: null, after: null, sheet: null, copied: {}, settingsResult: {},
@@ -2920,8 +2921,74 @@
     var limit = local ? stackRow('limit-row', U('limitLabel'), h('span', { class: 'set-main', text: U('localLine') }), null, 'set-rec') : limitRow(cap);
     return group(null, [todayRow, limit], 'spend-group');
   }
+
+  // ChatGPT subscription OAuth is independent of the OpenAI Platform key and is not
+  // selectable for chat until the subscription-backed provider is connected.
+  function chatgptGroup() {
+    var c = S.chatgpt;
+    if (!c) return null; // Not available in an older, test or unsupported desktop build.
+    var Y = function (key) { return T('yourAi.' + key); };
+    var connected = c.status === 'connected';
+    var state = c.ok === false ? Y('chatgptUnavailable')
+      : connected ? (c.sharing ? Y('chatgptConnected') : Y('chatgptPermissionMissing'))
+        : c.status === 'reauth_required' ? Y('chatgptReauth') : Y('chatgptDisconnected');
+    var actions = [];
+    if (S.chatgptBusy) {
+      actions.push(small(Y('chatgptCancel'), function () {
+        S.chatgptCancelled = true;
+        return B.chatgptCancelSignIn();
+      }, { fk: 'chatgpt-cancel' }));
+    } else if (c.ok !== false) {
+      actions.push(small(connected ? Y('chatgptReconnect') : Y('chatgptSignIn'), function () {
+        if (S.chatgptBusy) return;
+        S.chatgptBusy = true;
+        S.chatgptCancelled = false;
+        S.chatgptResult = null;
+        rerender(false);
+        return B.chatgptSignIn().then(function (result) {
+          if (!S.chatgptCancelled) S.chatgptResult = stamp(result);
+        }, function () {
+          if (!S.chatgptCancelled) S.chatgptResult = stamp({ ok: false, error: 'sign_in_failed' });
+        }).then(function () {
+          S.chatgptBusy = false;
+          return B.chatgptStatus().then(function (next) {
+            if (next && next.error !== 'unsupported') S.chatgpt = next;
+            rerender(false);
+          });
+        });
+      }, { fk: 'chatgpt-signin' }));
+      if (connected || c.status === 'reauth_required') {
+        actions.push(small(Y('chatgptDisconnect'), function () {
+          return B.chatgptDisconnect().then(function (result) {
+            if (result && result.ok) S.chatgptResult = null;
+            else if (result && result.error !== 'cancelled') S.chatgptResult = stamp(result);
+            return B.chatgptStatus().then(function (next) {
+              if (next && next.error !== 'unsupported') S.chatgpt = next;
+              rerender(false);
+            });
+          });
+        }, { fk: 'chatgpt-disconnect' }));
+      }
+    }
+    var outcome = S.chatgptResult;
+    var message = outcome && outcome.ok === false ? ({
+      open_browser_failed: Y('chatgptBrowserFailed'),
+      storage_unavailable: Y('chatgptUnavailable'),
+      multiple_accounts: Y('chatgptMultipleAccounts'),
+      cancelled: null,
+    }[outcome.error] || Y('chatgptFailure')) : null;
+    return group(null, [
+      stackRow('chatgpt-row', Y('chatgptLabel'), [
+        h('span', { class: 'set-main', text: S.chatgptBusy ? Y('chatgptConnecting') : state }),
+        c.ok === false ? null : h('span', { class: 'set-sub', text: Y('chatgptNotActive') }),
+        message ? rowLine('bad', message, outcome) : null,
+      ], h('div', { class: 'row' }, actions), 'set-rec'),
+    ], 'chatgpt-group');
+  }
+
   PAGES.provider = function () {
-    return Promise.all([ensureProviders(), B.usage({ days: 1 }), B.caps()]).then(function (res) {
+    return Promise.all([ensureProviders(), B.usage({ days: 1 }), B.caps(), B.chatgptStatus()]).then(function (res) {
+      S.chatgpt = res[3] && res[3].error !== 'unsupported' ? res[3] : null;
       var u = isErr(res[1]) ? {} : res[1];
       var caps = isErr(res[2]) ? null : res[2];
       var p = P();
@@ -2942,6 +3009,7 @@
         return pageNode('page-yourai', { left: [], right: [] }, [
           title(Y('title')), para(Y('emptyLine'), 'lead'),
           setupInProgress() ? null : h('div', { class: 'actions', 'data-key': 'actions' }, primary(Y('connectBtn'), openChange, { fk: 'connect-ai' })),
+          chatgptGroup(),
         ]);
       }
       var local = isLocal(cur.id);
@@ -3051,6 +3119,7 @@
         group(null, [aiRow, keyRow], 'ai-group'),
         modelBlock,
         spendGroup(u, caps, cur),
+        chatgptGroup(),
       ]);
     });
   };

@@ -672,6 +672,23 @@ async function start() {
     ...captureHelperPaths({ packaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
     captureTeamId: ownTeamId({ packaged: app.isPackaged, platform: process.platform }),
   };
+  // Sign-in runs solely in Electron main. The window receives status, never OAuth credentials.
+  // Self-tests and screenshots cannot open the user's browser or use the user's keychain.
+  if (!HEADLESS) {
+    try {
+      const { createChatGPTConnection } = await importBridge('bridge/byok/auth/chatgpt-connection.mjs');
+      chatgpt = createChatGPTConnection({
+        userData, encryption: safeStorage,
+        openBrowser: async url => {
+          const target = new URL(url);
+          if (target.origin !== 'https://auth.openai.com') throw new Error('Untrusted ChatGPT sign-in destination');
+          await shell.openExternal(target.href);
+        },
+      });
+    } catch {
+      log('ChatGPT sign-in is unavailable in this build');
+    }
+  }
   const apiLine = l => log(`app API: ${l.mode}${l.reason ? ` (${l.reason})` : ''}`);
   if (SHOTS) {
     const { createMockApi } = await import('./src/mock-api.mjs');
@@ -684,7 +701,8 @@ async function start() {
     // The holder serves one boot at a time and never a stopped one (fix-102): a boot stopped while
     // no quit is committed starts again at once, and the window's mode and reason follow each boot.
     live = createLiveApi({
-      boot: () => loadApi({ appDir: HERE, packaged: app.isPackaged, paths, log, selfTest: SELF_TEST }),
+      boot: () => loadApi({ appDir: HERE, packaged: app.isPackaged, paths, log, selfTest: SELF_TEST,
+        bootOptions: { chatgpt: () => chatgpt } }),
       log: holderLog,
       onBoot: (l) => { loaded = l; apiLine(l); },
     });
@@ -723,23 +741,6 @@ async function start() {
       return { ok: true, status: { ...updaterShown, remind: false } };
     },
   };
-  // Sign-in runs solely in Electron main. The window receives status, never OAuth credentials.
-  // Self-tests and screenshots cannot open the user's browser or use the user's keychain.
-  if (!HEADLESS) {
-    try {
-      const { createChatGPTConnection } = await importBridge('bridge/byok/auth/chatgpt-connection.mjs');
-      chatgpt = createChatGPTConnection({
-        userData, encryption: safeStorage,
-        openBrowser: async url => {
-          const target = new URL(url);
-          if (target.origin !== 'https://auth.openai.com') throw new Error('Untrusted ChatGPT sign-in destination');
-          await shell.openExternal(target.href);
-        },
-      });
-    } catch {
-      log('ChatGPT sign-in is unavailable in this build');
-    }
-  }
   const ipc = createIpc({
     api, keys, chatgpt, ledger, updater: ipcUpdater, appState,
     platform: process.platform,

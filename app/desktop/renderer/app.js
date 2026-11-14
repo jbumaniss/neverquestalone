@@ -510,7 +510,7 @@
 
   var S = {
     status: null, info: null, appState: null, providers: null, updates: null,
-    chatgpt: null, chatgptBusy: false, chatgptCancelled: false, chatgptResult: null,
+    chatgpt: null, chatgptModels: null, chatgptModel: null, chatgptBusy: false, chatgptCancelled: false, chatgptResult: null,
     page: null, demoDismissed: false, setup: null, keyFlow: null, ya: null, capsDraft: null, capsResult: null,
     lastChat: null, memChar: null, open: {}, noticeGone: {}, cardCheck: null, fuseSeen: false, screenSeen: null,
     pendingFocus: null, after: null, sheet: null, copied: {}, settingsResult: {},
@@ -619,6 +619,7 @@
    */
   function chooseModel(cur, mid) {
     var mm = modelById(cur.id, mid) || {};
+    if (cur.id === 'openai' && cur.auth === 'oauth') return B.chatgptUse({ model: mid });
     return B.choose({ provider: cur.id, model: mid, effort: mm.effort ? (nearestLevel(levelsOf(mm), cur.effort || 'low') || 'low') : null });
   }
   /** A notice's Use <model>: the pick, then Your AI at its models with the result under them, as a pick there shows it. */
@@ -2929,6 +2930,10 @@
     if (!c) return null; // Not available in an older, test or unsupported desktop build.
     var Y = function (key) { return T('yourAi.' + key); };
     var connected = c.status === 'connected';
+    var active = P().provider && P().provider.id === 'openai' && P().provider.auth === 'oauth';
+    var models = S.chatgptModels && S.chatgptModels.ok && Array.isArray(S.chatgptModels.models) ? S.chatgptModels.models : [];
+    var preferred = active ? P().provider.model : S.chatgptModel;
+    var selected = models.some(function (m) { return m.id === preferred; }) ? preferred : models.length ? models[0].id : null;
     var state = c.ok === false ? Y('chatgptUnavailable')
       : connected ? (c.sharing ? Y('chatgptConnected') : Y('chatgptPermissionMissing'))
         : c.status === 'reauth_required' ? Y('chatgptReauth') : Y('chatgptDisconnected');
@@ -2953,7 +2958,10 @@
           S.chatgptBusy = false;
           return B.chatgptStatus().then(function (next) {
             if (next && next.error !== 'unsupported') S.chatgpt = next;
-            rerender(false);
+            return B.chatgptModels().then(function (models) {
+              S.chatgptModels = models && models.ok ? models : null;
+              rerender(false);
+            });
           });
         });
       }, { fk: 'chatgpt-signin' }));
@@ -2980,15 +2988,31 @@
     return group(null, [
       stackRow('chatgpt-row', Y('chatgptLabel'), [
         h('span', { class: 'set-main', text: S.chatgptBusy ? Y('chatgptConnecting') : state }),
-        c.ok === false ? null : h('span', { class: 'set-sub', text: Y('chatgptNotActive') }),
+        c.ok === false ? null : h('span', { class: 'set-sub', text: active ? Y('chatgptActive') : Y('chatgptNotActive') }),
         message ? rowLine('bad', message, outcome) : null,
       ], h('div', { class: 'row' }, actions), 'set-rec'),
+      connected && c.sharing && selected ? h('div', { class: 'row', 'data-key': 'chatgpt-model-choose' },
+        h('select', { class: 'select', id: 'chatgpt-model', 'aria-label': Y('chatgptModel'),
+          onChange: function (e) { S.chatgptModel = e.target.value; } },
+          models.map(function (m) { return h('option', { value: m.id, selected: m.id === selected, text: F.clean(m.name, 80) }); })),
+        small(Y('chatgptUse'), function () {
+          var model = models.some(function (m) { return m.id === S.chatgptModel; }) ? S.chatgptModel : selected;
+          return B.chatgptUse({ model: model }).then(function (result) {
+            S.chatgptResult = stamp(result || { ok: false });
+            if (!result || !result.ok) { rerender(false); return; }
+            return Promise.all([refreshStatus(), ensureProviders(), B.chatgptStatus(), B.chatgptModels()]).then(function (parts) {
+              S.chatgpt = parts[2]; S.chatgptModels = parts[3]; rerender(false);
+            });
+          });
+        }, { fk: 'chatgpt-use' })
+      ) : null,
     ], 'chatgpt-group');
   }
 
   PAGES.provider = function () {
-    return Promise.all([ensureProviders(), B.usage({ days: 1 }), B.caps(), B.chatgptStatus()]).then(function (res) {
+    return Promise.all([ensureProviders(), B.usage({ days: 1 }), B.caps(), B.chatgptStatus(), B.chatgptModels()]).then(function (res) {
       S.chatgpt = res[3] && res[3].error !== 'unsupported' ? res[3] : null;
+      S.chatgptModels = res[4] && res[4].ok ? res[4] : null;
       var u = isErr(res[1]) ? {} : res[1];
       var caps = isErr(res[2]) ? null : res[2];
       var p = P();
@@ -3017,16 +3041,17 @@
       var k = (providerById(cur.id) || {}).key || {};
       // A key a test just rejected, or the card says so, reads Rejected, never a green Saved (CL-player-42).
       var rejected = cur.keyState === 'invalid' || cur.keyState === 'expired' || view() === 'key_invalid' || view() === 'signed_out' || !!(ya.nowTest && !ya.nowTest.ok && ya.nowTest.error === 'auth_invalid');
-      var keyless = local || (custom && !k.saved);
+      var oauth = cur.auth === 'oauth';
+      var keyless = local || (custom && !k.saved) || oauth;
       var retest = function () { return B.testKey({ provider: cur.id }).then(function (r) { ya.nowTest = stamp(r || { ok: false }); rerender(); }); };
       // The AI: its name and company on one line; a server on this computer says so there, with
       // Check again beside Switch (CL-words-45: no Key row without a key).
-      var lt = keyless ? ya.nowTest : null;
+      var lt = keyless && !oauth ? ya.nowTest : null;
       var aiLine = lt ? (lt.ok ? rowLine('ok', Y('localOkLine', { app: F.clean(cur.name, 40) }), lt) : rowLine('bad', stillId(cardCause(), lt) ? T(stillId(cardCause(), lt), stillVars()) : errLines(lt).filter(Boolean).join(' '), lt)) : null;
-      var aiSub = custom ? [customName(), keyless ? Y('localValue') : null].filter(Boolean).join(' · ') : keyless ? Y('localValue') : coName(cur.id);
+      var aiSub = oauth ? Y('chatgptSource') : custom ? [customName(), keyless ? Y('localValue') : null].filter(Boolean).join(' · ') : keyless ? Y('localValue') : coName(cur.id);
       var aiRow = stackRow('ai-row', Y('aiLabel'),
         [h('span', { class: 'set-main' }, h('span', { text: custom ? F.clean(disp('custom').card || 'Other', 24) : aiName(cur.id) }), h('span', { class: 'set-sub', 'data-count': custom || !keyless ? 'data' : null, text: aiSub })), aiLine],
-        h('div', { class: 'row' }, keyless ? busyBtn(Y('checkAgainBtn'), retest, 'btn btn-quiet btn-sm', { fk: 'now-test' }) : null, small(Y('changeBtn'), openChange, { fk: 'change-ai' })), 'set-rec');
+        h('div', { class: 'row' }, keyless && !oauth ? busyBtn(Y('checkAgainBtn'), retest, 'btn btn-quiet btn-sm', { fk: 'now-test' }) : null, small(Y('changeBtn'), openChange, { fk: 'change-ai' })), 'set-rec');
       // The key: masked on one line with its chip; Test key and Replace key, one pair in one style.
       // A retired model's Test result is the model's, not the key's: it sits under Model (CL-player-52).
       var retiredNow = view() === 'model_retired';

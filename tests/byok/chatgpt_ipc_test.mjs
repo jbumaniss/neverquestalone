@@ -19,6 +19,11 @@ function fixture({ confirm = true, chatgpt = null } = {}) {
   const dialogs = [];
   const ipc = createIpc({
     chatgpt: mock,
+    api: {
+      chooseChatGPT: async ({ model }) => { calls.push('use:' + model); return { ok: true, model }; },
+      chatgptChanged: async () => { calls.push('changed'); return { ok: true }; },
+      status: async () => ({ backend: { provider: { id: 'anthropic', auth: 'key' } } }),
+    },
     keys: { secrets: () => [credentials.accessToken, credentials.refreshToken] },
     confirm: async spec => { dialogs.push(spec); return confirm; },
     log: () => {},
@@ -49,7 +54,7 @@ test('browser sign-in and disconnect require native confirmation', async () => {
   const accepted = fixture();
   assert.equal((await accepted.ipc.call('chatgptSignIn')).ok, true);
   assert.equal((await accepted.ipc.call('chatgptDisconnect')).ok, true);
-  assert.deepEqual(accepted.calls, ['signIn', 'disconnect']);
+  assert.deepEqual(accepted.calls, ['signIn', 'changed', 'disconnect', 'changed']);
   assert.equal(accepted.dialogs.length, 2);
   assert.match(accepted.dialogs[0].message, /Sign in with ChatGPT/);
   assert.equal(accepted.dialogs[1].destructive, true);
@@ -65,4 +70,19 @@ test('cancellation needs no confirmation and missing integration is unsupported'
   assert.equal((await missing.ipc.call('chatgptSignIn')).error, 'unsupported');
   assert.equal((await missing.ipc.call('chatgptCancelSignIn')).error, 'unsupported');
   assert.equal((await missing.ipc.call('chatgptDisconnect')).error, 'unsupported');
+});
+
+
+test('activation validates a selected model, requires consent and never exposes credentials', async () => {
+  const rejected = fixture({ confirm: false });
+  assert.equal((await rejected.ipc.call('chatgptUse', { model: 'gpt-test' })).error, 'cancelled');
+  assert.deepEqual(rejected.calls, []);
+  const accepted = fixture();
+  assert.deepEqual(await accepted.ipc.call('chatgptUse', { model: 'gpt-test' }), { ok: true, model: 'gpt-test' });
+  assert.deepEqual(accepted.calls, ['use:gpt-test']);
+  assert.match(accepted.dialogs[0].detail, /game context/);
+  assert.match(accepted.dialogs[0].detail, /API keys are preserved/);
+  assert.equal((await accepted.ipc.call('chatgptUse', { model: '../bad' })).error, 'bad_input');
+  assert.equal((await accepted.ipc.call('chatgptUse', { model: 'gpt-test', token: 'secret' })).error, 'bad_input');
+  assert.deepEqual(await accepted.ipc.call('chatgptAccessToken'), { ok: false, error: 'unknown_call' });
 });

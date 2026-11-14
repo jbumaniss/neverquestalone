@@ -134,6 +134,7 @@ import { writeFileQuick } from '../files.mjs';
 import { CHAT_RE } from '../transport/records.mjs';
 import { loadManifests, createProvider, userLine, retryPlan, resolveModel, manifestFor, effortLevels, thinkRoom, outputCeiling, EFFORT_LEVELS, THINK_ROOM, DEFAULT_TIMEOUTS } from './providers/index.mjs';
 import { makeError, errorLogFields, cleanRequestId } from './providers/errors.mjs';
+import { createChatGPTBackendProvider } from './auth/chatgpt-backend-provider.mjs';
 import { loadPack, personaName } from './runtime/pack.mjs';
 import { FILES as MEMORY_FILES, MEMORY_DIR, charKey } from './runtime/logbook.mjs';
 import { createUsageHistory } from './usage/history.mjs';
@@ -551,7 +552,8 @@ export function createLocalBackend(handlers = {}, opts = {}) {
     if (!manifest) throw new Error(`unknown provider ${String(settings.provider).slice(0, 32)}`);
     const model = settings.model ?? manifest.models?.default ?? null;
     const listed = manifest.models?.list?.find(e => e.id === model);
-    const provider = createProvider(manifest, {
+    const subscription = settings.provider === 'openai' && settings.auth === 'oauth';
+    const provider = subscription ? createChatGPTBackendProvider(opts.chatgpt) : createProvider(manifest, {
       getKey: async (id) => {
         if (!keystore) return null;
         const key = await keystore.get(id);
@@ -564,7 +566,7 @@ export function createLocalBackend(handlers = {}, opts = {}) {
       ...providerOpts,
     });
     // free: a server on this computer, or one at home serving its own model (customManifest's priceSource).
-    prov = { id: manifest.id, manifest, model, provider, local: manifest.local === true, free: manifest.local === true || manifest.priceSource === 'free', name: manifest.name, modelName: listed?.label ?? model ?? '' };
+    prov = { id: manifest.id, manifest, model, provider, local: manifest.local === true, free: subscription || manifest.local === true || manifest.priceSource === 'free', name: subscription ? 'ChatGPT' : manifest.name, modelName: listed?.label ?? model ?? '' };
     return prov;
   }
   const names = () => {
@@ -774,6 +776,13 @@ export function createLocalBackend(handlers = {}, opts = {}) {
   async function checkKey() {
     let p;
     try { p = current(); } catch { keyState = 'missing'; keyReason = 'unknown provider'; return; }
+    if (settings.provider === 'openai' && settings.auth === 'oauth') {
+      // Subscription access never checks or falls back to an OpenAI Platform API key.
+      const usable = createChatGPTBackendProvider(opts.chatgpt).usable();
+      keyState = usable ? 'ok' : 'missing';
+      keyReason = usable ? null : 'ChatGPT sign-in required';
+      return;
+    }
     if (p.local) { keyState = 'ok'; return; }
     // Other (custom) runs with or without a key: the service it names decides (a 401 is auth_invalid).
     if (p.manifest.auth?.optional === true) { if (keyState === 'missing') { keyState = 'ok'; keyReason = null; } return; }

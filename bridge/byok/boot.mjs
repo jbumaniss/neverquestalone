@@ -239,7 +239,7 @@ export async function bootByok(opts = {}) {
     fetch = undefined, capture: wantCapture = true, importer = defaultImporter,
     egress: wantEgress = true, manifests: givenManifests = null,
     priceBook: givenPriceBook = null, providerOpts = undefined, wow = {}, alive = pidAlive,
-    lockDir: givenLockDir = null, createCapture = null, backendOptions = null,
+    lockDir: givenLockDir = null, createCapture = null, backendOptions = null, chatgpt: getChatGPT = null,
     signalTimings = null, captureThresholds = null, realHome = accountHome(), electron = !!process.versions.electron, keystoreFactory = createKeyStore,
   } = opts;
   const pub = publicPaths({ platform, env, home });
@@ -373,7 +373,7 @@ export async function bootByok(opts = {}) {
     let api = null;
     const lockDir = givenLockDir ?? pub.state;
     const backendOpts = () => ({
-      config, dataDir: P.userData, keystore, manifests, priceBook, log, fetch: netFetch,
+      config, dataDir: P.userData, keystore, manifests, priceBook, log, fetch: netFetch, chatgpt: getChatGPT,
       ...(providerOpts ? { providerOpts } : {}), ...(backendOptions ?? {}),
     });
     // The core's handlers, with the app's status pushes beside them (every handler the core
@@ -629,7 +629,7 @@ export async function bootByok(opts = {}) {
     // ---- the app API
     api = createAppApi({
       bridge: core.bridge, backend: core.backend, capture: core.capture, keystore, config, paths: P, log, openExternal,
-      egress, saveConfig, manifests, priceBook, fetch: netFetch, platform, env, home,
+      egress, saveConfig, manifests, priceBook, fetch: netFetch, platform, env, home, chatgpt: getChatGPT,
       logLines: () => log.lines(), restart, halt: stopCore, wow, keystoreNote, version: P.version ?? null,
       settingsReset: !!loaded.reset, patchDay: () => core.patch?.notice() ?? null, configFile, screenReading: applyScreenReading,
     });

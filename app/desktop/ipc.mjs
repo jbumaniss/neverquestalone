@@ -564,6 +564,25 @@ export const HANDLERS = {
   // owns the browser callback, encrypted credentials and any future plan-usage requests.
   chatgptStatus: { input: NONE, run: ctx => ctx.chatgpt?.status?.() ?? unsupported },
   chatgptModels: { input: NONE, run: ctx => ctx.chatgpt?.models?.() ?? unsupported },
+  chatgptUse: {
+    input: obj({ model: { type: 'string', minLength: 1, maxLength: 128, pattern: /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,127}$/ } }, ['model']),
+    prepare: async ctx => {
+      const account = ctx.chatgpt?.status?.();
+      if (account?.status !== 'connected' || account.sharing !== true) return { ok: false, error: 'sign_in_required' };
+      let active = false;
+      try {
+        const p = providerOf(await ctx.api.status());
+        active = p?.id === 'openai' && p?.auth === 'oauth';
+      } catch { /* confirm for any uncertainty */ }
+      return { active };
+    },
+    confirm: (ctx, v, prep) => prep.active ? null : ({
+      message: 'Use ChatGPT for WoW replies?',
+      detail: 'NeverQuestAlone will send your game context and chat messages to OpenAI under your ChatGPT plan. Your existing API keys are preserved and will not be billed for these requests.',
+      okLabel: 'Use ChatGPT', cancelLabel: 'Cancel',
+    }),
+    run: (ctx, v) => ctx.api.chooseChatGPT({ model: v.model }),
+  },
   chatgptSignIn: {
     input: NONE,
     confirm: () => ({
@@ -571,7 +590,12 @@ export const HANDLERS = {
       detail: 'Your system browser will open OpenAI sign-in. NeverQuestAlone will request permission to use eligible ChatGPT plan features. You can decline in your browser.',
       okLabel: 'Continue', cancelLabel: 'Cancel',
     }),
-    run: ctx => ctx.chatgpt?.signIn?.() ?? unsupported,
+    run: async ctx => {
+      if (!ctx.chatgpt?.signIn) return unsupported;
+      const result = await ctx.chatgpt.signIn();
+      if (result?.ok) await ctx.api?.chatgptChanged?.();
+      return result;
+    },
   },
   chatgptCancelSignIn: { input: NONE, run: ctx => ctx.chatgpt?.cancelSignIn?.() ?? unsupported },
   chatgptDisconnect: {
@@ -581,7 +605,12 @@ export const HANDLERS = {
       detail: 'This removes locally stored ChatGPT credentials. Your other AI providers and their keys are unchanged.',
       okLabel: 'Disconnect', cancelLabel: 'Cancel', destructive: true,
     }),
-    run: ctx => ctx.chatgpt?.disconnect?.() ?? unsupported,
+    run: async ctx => {
+      if (!ctx.chatgpt?.disconnect) return unsupported;
+      const result = await ctx.chatgpt.disconnect();
+      if (result?.ok) await ctx.api?.chatgptChanged?.();
+      return result;
+    },
   },
   appInfo: { input: NONE, run: ctx => ctx.info() },
   notices: { input: NONE, run: ctx => ctx.notices() },

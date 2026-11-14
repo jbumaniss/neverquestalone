@@ -29,19 +29,25 @@ test('ChatGPT sign-in is separate from an OpenAI API key and never changes the s
     },
     disconnect: () => { status = { ok: true, status: 'disconnected', sharing: false }; return status; },
     cancelSignIn: () => ({ ok: true }),
+    models: async () => ({ ok: true, models: [{ id: 'gpt-test', name: 'GPT Test' }] }),
   };
   const rig = await pageRig({ state: READY, hash: 'provider', chatgpt });
   assert.match(row(rig).textContent, /ChatGPT accountNot connected/);
   assert.ok(action(rig, 'chatgpt-signin'));
   await rig.press(action(rig, 'chatgpt-signin'));
   assert.match(row(rig).textContent, /Connected/);
-  assert.match(row(rig).textContent, /ChatGPT replies are not enabled yet/);
+  assert.match(row(rig).textContent, /Choose a model to use ChatGPT in WoW/);
+  assert.ok(action(rig, 'chatgpt-use'));
+  let useModel = null;
+  rig.ctx.api.chooseChatGPT = async ({ model }) => { useModel = model; return { ok: true, model }; };
+  await rig.press(action(rig, 'chatgpt-use'));
+  assert.equal(useModel, 'gpt-test');
   assert.ok(!row(rig).textContent.includes('safe-subject'));
   assert.match(rig.document.getElementById('ai-row').textContent, /Claude/);
   assert.ok(action(rig, 'chatgpt-disconnect'));
   await rig.press(action(rig, 'chatgpt-disconnect'));
   assert.match(row(rig).textContent, /Not connected/);
-  assert.equal(rig.confirms.length, 2);
+  assert.equal(rig.confirms.length, 3);
 });
 
 test('missing plan permission and unavailable encryption are displayed without pretending to connect', async () => {

@@ -933,15 +933,30 @@ export function createAppApi(opts = {}) {
           continue;
         }
         const local = t.local === true;
+        const subscription = t.id === 'openai' && B().provider === 'openai' && B().auth === 'oauth';
+        let accountModels = null;
+        if (subscription) {
+          try {
+            const account = typeof opts.chatgpt === 'function' ? opts.chatgpt() : null;
+            const result = await account?.models?.();
+            if (result?.ok === true && Array.isArray(result.models)) {
+              accountModels = result.models
+                .filter(m => typeof m?.id === 'string' && typeof m?.name === 'string')
+                .map(m => ({ id: m.id, name: m.name, tier: 'other', effort: false, efforts: [],
+                  priceHint: null, levelDays: null, costRank: null }));
+            }
+          } catch { /* keep current setting without exposing tokens */ }
+        }
         out.push({
           id: t.id,
-          name: t.name,
+          name: subscription ? 'ChatGPT' : t.name,
           hidden: !!t.hidden,
-          auth: local ? 'local' : 'key',
-          models: modelsOf(t),
+          auth: subscription ? 'oauth' : local ? 'local' : 'key',
+          // Never show Platform API models as a fallback when subscription discovery fails.
+          models: subscription ? (accountModels ?? []) : modelsOf(t),
           ...playerCard(t),
           terms: { link: linkId(t, local ? 'privacy' : 'terms'), recorded: termsOk(t) },
-          key: local ? null : await keyView(t.id),
+          key: local || subscription ? null : await keyView(t.id),
         });
       }
       return clean(out);
@@ -1053,6 +1068,41 @@ export function createAppApi(opts = {}) {
       changed();
       log('app-connect', { provider: CUSTOM_ID, local: c.local, key: !!key });
       return { ok: true, name: new URL(c.baseUrl).host, model, local: c.local, ...(key ? { masked: maskKey(key) } : {}), testCall: t.testCall };
+    },
+
+    /** Select ChatGPT plan-backed inference, without reading or changing Platform API keys. */
+    async chooseChatGPT({ model } = {}) {
+      const get = opts.chatgpt;
+      const account = typeof get === 'function' ? get() : null;
+      if (!account) return { ok: false, error: 'unsupported' };
+      const status = account.status?.();
+      if (status?.ok !== true || status.status !== 'connected' || !status.sharing) {
+        return { ok: false, error: 'sign_in_required' };
+      }
+      let catalog;
+      try { catalog = await account.models(); } catch { return { ok: false, error: 'model_discovery_failed' }; }
+      if (catalog?.ok !== true || !Array.isArray(catalog.models)) return { ok: false, error: catalog?.error ?? 'model_discovery_failed' };
+      if (typeof model !== 'string' || !catalog.models.some(x => x.id === model)) return { ok: false, error: 'unknown_model' };
+
+      const before = { provider: B().provider, model: B().model, effort: B().effort, auth: B().auth };
+      Object.assign(B(), { provider: 'openai', model, effort: null, auth: 'oauth' });
+      try { await S.backend?.setConfig?.({ provider: 'openai', model, effort: null, auth: 'oauth' }); }
+      catch {
+        Object.assign(B(), before);
+        return { ok: false, error: 'failed' };
+      }
+      persist();
+      changed();
+      log('app-chatgpt-selected', { model });
+      return { ok: true, model };
+    },
+
+    /** A sign-in or disconnect can change whether queued WoW turns may run. */
+    async chatgptChanged() {
+      if (B().provider !== 'openai' || B().auth !== 'oauth') return { ok: true };
+      try { await S.backend?.refresh?.({ keyChanged: true }); } catch { return { ok: false, error: 'failed' }; }
+      changed();
+      return { ok: true };
     },
 
     async choose(v) {

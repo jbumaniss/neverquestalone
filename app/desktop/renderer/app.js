@@ -2934,6 +2934,11 @@
     var models = S.chatgptModels && S.chatgptModels.ok && Array.isArray(S.chatgptModels.models) ? S.chatgptModels.models : [];
     var preferred = active ? P().provider.model : S.chatgptModel;
     var selected = models.some(function (m) { return m.id === preferred; }) ? preferred : models.length ? models[0].id : null;
+    var modelFailure = connected && c.sharing && !selected
+      ? (S.chatgptModels && S.chatgptModels.ok === false
+        ? Y('chatgptModelsError') + (Number.isInteger(S.chatgptModels.httpStatus)
+          ? ' (HTTP ' + S.chatgptModels.httpStatus + ')' : '')
+        : Y('chatgptNoModels')) : null;
     var state = c.ok === false ? Y('chatgptUnavailable')
       : connected ? (c.sharing ? Y('chatgptConnected') : Y('chatgptPermissionMissing'))
         : c.status === 'reauth_required' ? Y('chatgptReauth') : Y('chatgptDisconnected');
@@ -2944,6 +2949,14 @@
         return B.chatgptCancelSignIn();
       }, { fk: 'chatgpt-cancel' }));
     } else if (c.ok !== false) {
+      if (connected && c.sharing && !selected) {
+        actions.push(small(Y('chatgptRetryModels'), function () {
+          return B.chatgptModels().then(function (result) {
+            S.chatgptModels = result && result.error !== 'unsupported' ? result : null;
+            rerender(false);
+          });
+        }, { fk: 'chatgpt-retry-models' }));
+      }
       actions.push(small(connected ? Y('chatgptReconnect') : Y('chatgptSignIn'), function () {
         if (S.chatgptBusy) return;
         S.chatgptBusy = true;
@@ -2959,7 +2972,7 @@
           return B.chatgptStatus().then(function (next) {
             if (next && next.error !== 'unsupported') S.chatgpt = next;
             return B.chatgptModels().then(function (models) {
-              S.chatgptModels = models && models.ok ? models : null;
+              S.chatgptModels = models && models.error !== 'unsupported' ? models : null;
               rerender(false);
             });
           });
@@ -2989,6 +3002,7 @@
       stackRow('chatgpt-row', Y('chatgptLabel'), [
         h('span', { class: 'set-main', text: S.chatgptBusy ? Y('chatgptConnecting') : state }),
         c.ok === false ? null : h('span', { class: 'set-sub', text: active ? Y('chatgptActive') : Y('chatgptNotActive') }),
+        modelFailure ? h('span', { class: 'set-sub', text: modelFailure }) : null,
         message ? rowLine('bad', message, outcome) : null,
       ], h('div', { class: 'row' }, actions), 'set-rec'),
       connected && c.sharing && selected ? h('div', { class: 'row', 'data-key': 'chatgpt-model-choose' },
@@ -3012,7 +3026,7 @@
   PAGES.provider = function () {
     return Promise.all([ensureProviders(), B.usage({ days: 1 }), B.caps(), B.chatgptStatus(), B.chatgptModels()]).then(function (res) {
       S.chatgpt = res[3] && res[3].error !== 'unsupported' ? res[3] : null;
-      S.chatgptModels = res[4] && res[4].ok ? res[4] : null;
+      S.chatgptModels = res[4] && res[4].error !== 'unsupported' ? res[4] : null;
       var u = isErr(res[1]) ? {} : res[1];
       var caps = isErr(res[2]) ? null : res[2];
       var p = P();

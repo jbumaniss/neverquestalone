@@ -65,3 +65,35 @@ test('missing plan permission and unavailable encryption are displayed without p
   assert.match(row(noEncryption).textContent, /Secure ChatGPT sign-in is unavailable/);
   assert.equal(action(noEncryption, 'chatgpt-signin'), null);
 });
+
+
+test('model discovery errors show safe HTTP status and can be retried', async () => {
+  let status = { ok: true, status: 'connected', sharing: true };
+  let attempts = 0;
+  const chatgpt = {
+    status: () => status,
+    models: async () => ++attempts === 1
+      ? { ok: false, error: 'service_unavailable', httpStatus: 520 }
+      : { ok: true, models: [{ id: 'gpt-test', name: 'GPT Test' }] },
+    signIn: async () => ({ ok: true }),
+    disconnect: () => ({ ok: true }),
+  };
+  const rig = await pageRig({ state: READY, hash: 'provider', chatgpt });
+  assert.match(row(rig).textContent, /Could not load ChatGPT models\. \(HTTP 520\)/);
+  assert.equal(action(rig, 'chatgpt-use'), null, 'do not allow model activation on discovery error');
+  assert.ok(action(rig, 'chatgpt-retry-models'));
+  await rig.press(action(rig, 'chatgpt-retry-models'));
+  assert.equal(attempts, 2);
+  assert.ok(action(rig, 'chatgpt-use'));
+  assert.ok(!row(rig).textContent.includes('HTTP 520'));
+});
+
+test('empty model catalog shows an explanation and retry, not a misleading model picker', async () => {
+  const rig = await pageRig({ state: READY, hash: 'provider', chatgpt: {
+    status: () => ({ ok: true, status: 'connected', sharing: true }),
+    models: async () => ({ ok: true, models: [] }),
+  } });
+  assert.match(row(rig).textContent, /No ChatGPT models available/);
+  assert.ok(action(rig, 'chatgpt-retry-models'));
+  assert.equal(action(rig, 'chatgpt-use'), null);
+});

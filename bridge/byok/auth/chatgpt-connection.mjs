@@ -122,7 +122,11 @@ export function createChatGPTConnection({
       catch (err) {
         const allowed = new Set(['sign_in_required', 'plan_permission_denied',
           'plan_usage_limited', 'invalid_model_catalog', 'service_unavailable', 'cancelled']);
-        return { ok: false, error: allowed.has(err?.code) ? err.code : 'service_unavailable' };
+        return {
+          ok: false, error: allowed.has(err?.code) ? err.code : 'service_unavailable',
+          ...(Number.isInteger(err?.status) && err.status >= 400 && err.status <= 599
+            ? { httpStatus: err.status } : {}),
+        };
       }
     },
     // Main-process-only APIs. Never attach either to renderer IPC.

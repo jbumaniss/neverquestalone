@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { createLocalBackend } from '../../bridge/byok/backend.mjs';
+import { createLocalBackend, settingsOf } from '../../bridge/byok/backend.mjs';
 import { createAppApi } from '../../bridge/byok/app-api.mjs';
 import { loadManifests } from '../../bridge/byok/providers/index.mjs';
 import { createKeyStore } from '../../bridge/byok/security/keystore.mjs';
@@ -104,8 +104,19 @@ test('app chooses only models returned by ChatGPT, persists OAuth mode and switc
   assert.deepEqual(updates.at(-1), { provider: 'openai', model: 'gpt-test', effort: null, auth: 'oauth' });
   assert.equal(writes.at(-1).byok.auth, 'oauth');
   assert.equal((await api.providers()).find(p => p.id === 'openai').auth, 'oauth');
-  assert.deepEqual((await api.providers()).find(p => p.id === 'openai').models.map(m => m.id), ['gpt-test']);
+  const openai = (await api.providers()).find(p => p.id === 'openai');
+  assert.deepEqual(openai.models.map(m => m.id), ['gpt-test']);
+  assert.ok(openai.apiModels.length > 0, 'existing API-key models remain available');
+  assert.equal(openai.key.saved, true, 'saved Platform key remains visible for explicit key mode');
   await api.choose({ provider: 'openai', model: 'gpt-6-luna', effort: null });
   assert.equal(config.byok.auth, 'key', 'returning to Platform requires explicit key choice');
   assert.equal(await keystore.get('openai'), CANARY_KEYS.openai);
+});
+
+
+test('a forged OAuth flag cannot switch Anthropic or another API-key provider to bearer auth', () => {
+  assert.equal(settingsOf({ provider: 'anthropic', auth: 'oauth' }).auth, 'key');
+  assert.equal(settingsOf({ provider: 'google', auth: 'oauth' }).auth, 'key');
+  assert.equal(settingsOf({ provider: 'openai', auth: 'oauth' }).auth, 'oauth');
+  assert.equal(settingsOf({ provider: 'openai', auth: 'key' }).auth, 'key');
 });

@@ -84,5 +84,7 @@ test('activation validates a selected model, requires consent and never exposes 
   assert.match(accepted.dialogs[0].detail, /API keys are preserved/);
   assert.equal((await accepted.ipc.call('chatgptUse', { model: '../bad' })).error, 'bad_input');
   assert.equal((await accepted.ipc.call('chatgptUse', { model: 'gpt-test', token: 'secret' })).error, 'bad_input');
+  assert.equal((await accepted.ipc.call('chatgptUse', { model: 'gpt-test', auth: 'key' })).error, 'bad_input');
+  assert.equal((await accepted.ipc.call('chatgptUse', { model: 'gpt-test', provider: 'anthropic' })).error, 'bad_input');
   assert.deepEqual(await accepted.ipc.call('chatgptAccessToken'), { ok: false, error: 'unknown_call' });
 });

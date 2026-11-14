@@ -209,7 +209,7 @@ export function settingsOf(config) {
     // Other's service (provider 'custom'): its base URL and model (providers/index.mjs customManifest).
     custom: isObj(c.custom) ? { baseUrl: typeof c.custom.baseUrl === 'string' ? c.custom.baseUrl : null, model: typeof c.custom.model === 'string' ? c.custom.model : null } : null,
     effort,
-    auth: c.auth === 'oauth' ? 'oauth' : 'key',
+    auth: c.provider === 'openai' && c.auth === 'oauth' ? 'oauth' : 'key',
     persona: personaName(c.persona?.name ?? c.companion),
     caps: isObj(c.caps) ? { ...c.caps } : {},
     identity: c.privacy?.identity === true,
@@ -554,11 +554,9 @@ export function createLocalBackend(handlers = {}, opts = {}) {
     const listed = manifest.models?.list?.find(e => e.id === model);
     const subscription = settings.provider === 'openai' && settings.auth === 'oauth';
     const provider = subscription ? createChatGPTBackendProvider(opts.chatgpt) : createProvider(manifest, {
-      getKey: async (id) => {
-        if (!keystore) return null;
-        const key = await keystore.get(id);
-        return key && settings.auth === 'oauth' ? { key, kind: 'oauth' } : key;
-      },
+      // The BYOK adapter accepts only OS-keystore API keys. OAuth credentials
+      // never come through getKey or a renderer-provided string.
+      getKey: async (id) => keystore ? keystore.get(id) : null,
       log,
       now: clock,
       requestOptions: settings.requestOptions,

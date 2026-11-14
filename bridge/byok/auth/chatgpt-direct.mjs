@@ -189,6 +189,7 @@ export function createChatGPTDirect({ accessToken, fetchFn = globalThis.fetch } 
 
   return Object.freeze({
     listModels, stream,
+    cachedModels() { return models && Date.now() < validUntil ? models.map(m => ({ ...m })) : null; },
     invalidateModels() { models = null; validUntil = 0; },
   });
 }

@@ -129,6 +129,8 @@ export function createChatGPTConnection({
         };
       }
     },
+    // Cached catalog is safe display metadata; no network is performed.
+    cachedModels() { return direct.cachedModels(); },
     // Main-process-only APIs. Never attach either to renderer IPC.
     accessToken: getAccessToken,
     streamResponse: (req, opts) => direct.stream(req, opts),

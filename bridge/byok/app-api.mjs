@@ -486,7 +486,10 @@ export function createAppApi(opts = {}) {
     const masked = masks.get(id);
     if (!masked) return { saved: false };
     let state = 'ok';
-    if (id === B().provider) { try { state = S.backend?.status?.()?.provider?.keyState ?? 'ok'; } catch { /* ok */ } }
+    // A subscription connection's state is unrelated to its separately saved Platform API key.
+    if (id === B().provider && B().auth !== 'oauth') {
+      try { state = S.backend?.status?.()?.provider?.keyState ?? 'ok'; } catch { /* ok */ }
+    }
     // A first key saved while its account had no credit (T1): saved, and says so until a test passes.
     if (B().keyState[id]?.state === 'no_credit' && (state === 'ok' || state === 'missing')) state = 'no_credit';
     return { saved: true, masked, state };
@@ -934,18 +937,21 @@ export function createAppApi(opts = {}) {
         }
         const local = t.local === true;
         const subscription = t.id === 'openai' && B().provider === 'openai' && B().auth === 'oauth';
+        // Do not perform account model discovery while listing providers. That
+        // network call previously blocked rendering Your AI, even when Claude
+        // was selected. Discovery happens only when the user opens OpenAI OAuth.
         let accountModels = null;
         if (subscription) {
           try {
             const account = typeof opts.chatgpt === 'function' ? opts.chatgpt() : null;
-            const result = await account?.models?.();
-            if (result?.ok === true && Array.isArray(result.models)) {
-              accountModels = result.models
+            const cached = account?.cachedModels?.();
+            if (Array.isArray(cached)) {
+              accountModels = cached
                 .filter(m => typeof m?.id === 'string' && typeof m?.name === 'string')
-                .map(m => ({ id: m.id, name: m.name, tier: 'other', effort: false, efforts: [],
-                  priceHint: null, levelDays: null, costRank: null }));
+                .map((m, i) => ({ id: m.id, name: m.name, tier: 'other',
+                  effort: false, efforts: [], priceHint: null, levelDays: null, costRank: null }));
             }
-          } catch { /* keep current setting without exposing tokens */ }
+          } catch { /* no network and no unverified model fallback */ }
         }
         out.push({
           id: t.id,
@@ -954,9 +960,10 @@ export function createAppApi(opts = {}) {
           auth: subscription ? 'oauth' : local ? 'local' : 'key',
           // Never show Platform API models as a fallback when subscription discovery fails.
           models: subscription ? (accountModels ?? []) : modelsOf(t),
+          ...(subscription ? { apiModels: modelsOf(t) } : {}),
           ...playerCard(t),
           terms: { link: linkId(t, local ? 'privacy' : 'terms'), recorded: termsOk(t) },
-          key: local || subscription ? null : await keyView(t.id),
+          key: local ? null : await keyView(t.id),
         });
       }
       return clean(out);

@@ -510,7 +510,7 @@
 
   var S = {
     status: null, info: null, appState: null, providers: null, updates: null,
-    chatgpt: null, chatgptModels: null, chatgptModel: null, chatgptBusy: false, chatgptCancelled: false, chatgptResult: null,
+    chatgpt: null, chatgptModels: null, chatgptModelsBusy: false, chatgptBusy: false, chatgptCancelled: false, chatgptResult: null,
     page: null, demoDismissed: false, setup: null, keyFlow: null, ya: null, capsDraft: null, capsResult: null,
     lastChat: null, memChar: null, open: {}, noticeGone: {}, cardCheck: null, fuseSeen: false, screenSeen: null,
     pendingFocus: null, after: null, sheet: null, copied: {}, settingsResult: {},
@@ -533,7 +533,15 @@
   function isCustom(id) { var p = providerById(id); return !!p && p.auth === 'custom'; }
   /** Other's service as the bridge saved it ({baseUrl, host, model, local}), or null before it's set. */
   function customOf() { var p = providerById('custom'); return p && p.custom ? p.custom : null; }
-  function modelsOf(id) { var p = providerById(id); return p && Array.isArray(p.models) ? p.models : []; }
+  function modelsOf(id) {
+    var p = providerById(id);
+    // The same OpenAI choice has two independent model catalogs. Keep the
+    // Platform list available when explicitly switching back to API-key auth.
+    var pick = S.ya && S.ya.view === 'pick' && S.ya.pick;
+    var apiKeyMode = id === 'openai' && p && p.auth === 'oauth' && pick && pick.pick === 'openai' && pick.authMode === 'key';
+    var models = apiKeyMode ? p.apiModels : p && p.models;
+    return Array.isArray(models) ? models : [];
+  }
   function offeredModels(id) { return modelsOf(id).filter(function (m) { return !!m; }); }
   // The thinking levels, cheapest first (the bridge's EFFORT_LEVELS): a model offers the ones its AI
   // company documents (the provider list's efforts), and the window labels them from its table.
@@ -576,7 +584,7 @@
   }
   /** The AIs with a row of their own (Claude, ChatGPT, Grok, Gemini), in the data file's order; hidden ones left out. */
   function cardAis() {
-    return (S.providers || []).filter(function (p) { return p && !p.hidden && p.auth === 'key' && p.display && p.display.card; })
+    return (S.providers || []).filter(function (p) { return p && !p.hidden && (p.auth === 'key' || p.auth === 'oauth') && p.display && p.display.card; })
       .sort(function (a, b) { return (a.display.order || 0) - (b.display.order || 0); });
   }
   function otherShown() { var p = providerById('custom'); return !!p && !p.hidden; }
@@ -1877,6 +1885,10 @@
         }
         st.pick = id;
         st.provider = id;
+        st.authMode = id === 'openai'
+          ? ((P().provider || {}).id === 'openai' ? (P().provider.auth || 'key')
+            : S.chatgpt && S.chatgpt.status === 'connected' ? 'oauth' : 'key')
+          : null;
         if (where === 'ai') saveSetup();
         rerender(false, function () { focusEl(document.getElementById('choice-' + id)); });
       }));
@@ -1980,7 +1992,11 @@
     var pid = st.pick;
     var p = providerById(pid);
     var k = (p && p.key) || {};
-    var needs = p && !isCustom(pid) && !isLocal(pid) && !st.slot && !st.hiddenAi && !(k.saved && k.state === 'ok') && !rejectedKey(k);
+    // OAuth is a ChatGPT plan connection, not an OpenAI Platform credit account.
+    var planAuth = pid === 'openai' && (st.authMode === 'oauth' ||
+      (!st.authMode && S.chatgpt && S.chatgpt.status === 'connected'));
+    var needs = p && !isCustom(pid) && !isLocal(pid) && !planAuth &&
+      !st.slot && !st.hiddenAi && !(k.saved && k.state === 'ok') && !rejectedKey(k);
     return h('div', { class: 'pick-head', 'data-key': 'pick-head' },
       h('div', { class: 'title-row', 'data-key': 'title-row' }, title(text), detailsBtn(isCustom(pid) ? customSheet : aiSheet(pid))),
       para(needs ? PT(pid, 'creditLead', namesOf(pid)) || T('ai.creditLead', namesOf(pid)) : '', 'lead lead-slot'));
@@ -2869,7 +2885,9 @@
     var retiredNow = view() === 'model_retired' ? cur.model : null;
     if (retiredNow) { S.retired = S.retired || {}; S.retired[retiredNow] = true; }
     models = models.filter(function (m) { return m.id === cur.model || !(S.retired && S.retired[m.id]); });
-    var cheap = models.length > 2 ? cheapestOf(models) : null;
+    // Subscription catalogs do not include prices; never invent a "Cheapest" badge.
+    var hasCost = models.some(function (m) { return m.priceHint && Array.isArray(m.priceHint.dayUsd); });
+    var cheap = models.length > 2 && hasCost ? cheapestOf(models) : null;
     var kind = function (m) { return m.id === retiredNow ? 'retired' : m.tier === 'default' ? 'recommended' : m.older ? 'older' : m.id === cheap ? 'cheapest' : m.tier === 'smarter' ? 'smartest' : null; };
     // The order (CL-design-46): the tagged rows, then the rest by cost a day, cheapest first, then Older.
     var hiOf = function (m) {
@@ -2883,6 +2901,7 @@
       return rank(a.m) - rank(b.m) || (rank(a.m) === 1 ? hiOf(a.m) - hiOf(b.m) : 0) || a.i - b.i;
     }).map(function (x) { return x.m; });
     var few = models.filter(function (m) { return m.tier === 'default' || m.id === cur.model || m.id === cheap; });
+    if (!few.length && models.length) few = [models[0]];
     var shown = all || few.length >= models.length ? models : few;
     var tag = function (m) {
       var k = kind(m);
@@ -2923,110 +2942,145 @@
     return group(null, [todayRow, limit], 'spend-group');
   }
 
-  // ChatGPT subscription OAuth is independent of the OpenAI Platform key and is not
-  // selectable for chat until the subscription-backed provider is connected.
-  function chatgptGroup() {
-    var c = S.chatgpt;
-    if (!c) return null; // Not available in an older, test or unsupported desktop build.
+  // Model discovery is deliberately not part of providers() or the Your AI page
+  // load. Slow/missing network access must never prevent local UI interaction.
+  function loadChatGPTModels() {
+    if (S.chatgptModelsBusy) return Promise.resolve();
+    S.chatgptModelsBusy = true;
+    return B.chatgptModels().then(function (result) {
+      S.chatgptModels = result && result.error !== 'unsupported' ? result : { ok: false, error: 'service_unavailable' };
+    }, function () {
+      S.chatgptModels = { ok: false, error: 'service_unavailable' };
+    }).then(function () {
+      S.chatgptModelsBusy = false;
+      if ((P().provider || {}).auth === 'oauth') {
+        return ensureProviders().then(function () { rerender(false); }, function () { rerender(false); });
+      }
+      rerender(false);
+    });
+  }
+  function chatgptModelRows() {
+    var r = S.chatgptModels;
+    if (!r || !r.ok || !Array.isArray(r.models)) return [];
+    return r.models.filter(function (m) { return m && typeof m.id === 'string' && typeof m.name === 'string'; })
+      .map(function (m, i) {
+        return { id: m.id, name: m.name, tier: 'other',
+          effort: false, efforts: [], priceHint: null, levelDays: null, costRank: null };
+      });
+  }
+  function modelDiscoveryLine() {
     var Y = function (key) { return T('yourAi.' + key); };
-    var connected = c.status === 'connected';
-    var active = P().provider && P().provider.id === 'openai' && P().provider.auth === 'oauth';
-    var models = S.chatgptModels && S.chatgptModels.ok && Array.isArray(S.chatgptModels.models) ? S.chatgptModels.models : [];
-    var preferred = active ? P().provider.model : S.chatgptModel;
-    var selected = models.some(function (m) { return m.id === preferred; }) ? preferred : models.length ? models[0].id : null;
-    var modelFailure = connected && c.sharing && !selected
-      ? (S.chatgptModels && S.chatgptModels.ok === false
-        ? Y('chatgptModelsError') + (Number.isInteger(S.chatgptModels.httpStatus)
-          ? ' (HTTP ' + S.chatgptModels.httpStatus + ')' : '')
-        : Y('chatgptNoModels')) : null;
-    var state = c.ok === false ? Y('chatgptUnavailable')
-      : connected ? (c.sharing ? Y('chatgptConnected') : Y('chatgptPermissionMissing'))
+    if (S.chatgptModelsBusy || !S.chatgptModels) return Y('chatgptLoadingModels');
+    if (S.chatgptModels.ok === false) {
+      var http = S.chatgptModels.httpStatus;
+      // Only fixed machine error codes leave main IPC; never include remote response bodies.
+      var reason = ['sign_in_required', 'plan_permission_denied', 'plan_usage_limited',
+        'invalid_model_catalog', 'service_unavailable', 'cancelled'].indexOf(S.chatgptModels.error) >= 0
+        ? ' (' + S.chatgptModels.error.replace(/_/g, ' ') + ')' : '';
+      return Y('chatgptModelsError') + (Number.isInteger(http) ? ' (HTTP ' + http + ')' : reason);
+    }
+    return Y('chatgptNoModels');
+  }
+  // OpenAI is already a provider in Switch. Its authorization modes belong
+  // underneath that selection, not in a second provider/model picker.
+  function openaiAuthentication(st) {
+    var Y = function (key) { return T('yourAi.' + key); };
+    var c = S.chatgpt;
+    var active = (P().provider || {}).id === 'openai' && (P().provider || {}).auth === 'oauth';
+    if (!st.authMode) st.authMode = active ? 'oauth' : c && c.status === 'connected' ? 'oauth' : 'key';
+    var oauth = st.authMode === 'oauth';
+    var options = segmented('openai-auth', Y('authenticationLabel'), [
+      { key: 'key', name: Y('apiKeyMode') }, { key: 'oauth', name: Y('chatgptMode') },
+    ], st.authMode, function (method) {
+      st.authMode = method;
+      st.oauthModel = null;
+      st.oauthResult = null;
+      if (method === 'oauth' && S.chatgpt && S.chatgpt.status === 'connected' && S.chatgpt.sharing &&
+          !S.chatgptModels && !S.chatgptModelsBusy) loadChatGPTModels();
+      rerender(false);
+    }, true);
+    var authLine = h('div', { class: 'set-block', 'data-key': 'openai-auth' },
+      h('span', { class: 'set-key', text: Y('authenticationLabel') }), options);
+    if (!oauth) return [authLine, aiActions(st, 'pick'), slotLine(st, 'pick')];
+    var connected = c && c.ok && c.status === 'connected';
+    var statusLine = !c || c.ok === false ? Y('chatgptUnavailable')
+      : connected ? c.sharing ? Y('chatgptConnected') : Y('chatgptPermissionMissing')
         : c.status === 'reauth_required' ? Y('chatgptReauth') : Y('chatgptDisconnected');
+    if (connected && c.sharing && !S.chatgptModels && !S.chatgptModelsBusy) loadChatGPTModels();
     var actions = [];
     if (S.chatgptBusy) {
       actions.push(small(Y('chatgptCancel'), function () {
         S.chatgptCancelled = true;
         return B.chatgptCancelSignIn();
       }, { fk: 'chatgpt-cancel' }));
-    } else if (c.ok !== false) {
-      if (connected && c.sharing && !selected) {
-        actions.push(small(Y('chatgptRetryModels'), function () {
-          return B.chatgptModels().then(function (result) {
-            S.chatgptModels = result && result.error !== 'unsupported' ? result : null;
-            rerender(false);
-          });
-        }, { fk: 'chatgpt-retry-models' }));
-      }
+    } else if (c && c.ok !== false) {
+      if (connected && c.sharing) actions.push(small(Y('chatgptRetryModels'), loadChatGPTModels, { fk: 'chatgpt-retry-models' }));
       actions.push(small(connected ? Y('chatgptReconnect') : Y('chatgptSignIn'), function () {
         if (S.chatgptBusy) return;
         S.chatgptBusy = true;
         S.chatgptCancelled = false;
-        S.chatgptResult = null;
+        st.oauthResult = null;
         rerender(false);
         return B.chatgptSignIn().then(function (result) {
-          if (!S.chatgptCancelled) S.chatgptResult = stamp(result);
-        }, function () {
-          if (!S.chatgptCancelled) S.chatgptResult = stamp({ ok: false, error: 'sign_in_failed' });
-        }).then(function () {
+          if (!S.chatgptCancelled && result && result.ok === false && result.error !== 'cancelled') st.oauthResult = result;
+        }, function () { st.oauthResult = { ok: false, error: 'sign_in_failed' }; }).then(function () {
           S.chatgptBusy = false;
           return B.chatgptStatus().then(function (next) {
-            if (next && next.error !== 'unsupported') S.chatgpt = next;
-            return B.chatgptModels().then(function (models) {
-              S.chatgptModels = models && models.error !== 'unsupported' ? models : null;
-              rerender(false);
-            });
+            S.chatgpt = next && next.error !== 'unsupported' ? next : null;
+            S.chatgptModels = null;
+            if (next && next.status === 'connected' && next.sharing) return loadChatGPTModels();
+            rerender(false);
           });
         });
       }, { fk: 'chatgpt-signin' }));
-      if (connected || c.status === 'reauth_required') {
-        actions.push(small(Y('chatgptDisconnect'), function () {
-          return B.chatgptDisconnect().then(function (result) {
-            if (result && result.ok) S.chatgptResult = null;
-            else if (result && result.error !== 'cancelled') S.chatgptResult = stamp(result);
-            return B.chatgptStatus().then(function (next) {
-              if (next && next.error !== 'unsupported') S.chatgpt = next;
-              rerender(false);
-            });
+      if (connected || c.status === 'reauth_required') actions.push(small(Y('chatgptDisconnect'), function () {
+        return B.chatgptDisconnect().then(function (result) {
+          if (result && result.ok) st.oauthResult = null;
+          else if (result && result.error !== 'cancelled') st.oauthResult = result;
+          return B.chatgptStatus().then(function (next) {
+            S.chatgpt = next && next.error !== 'unsupported' ? next : null;
+            S.chatgptModels = null;
+            rerender(false);
           });
-        }, { fk: 'chatgpt-disconnect' }));
-      }
+        });
+      }, { fk: 'chatgpt-disconnect' }));
     }
-    var outcome = S.chatgptResult;
-    var message = outcome && outcome.ok === false ? ({
-      open_browser_failed: Y('chatgptBrowserFailed'),
-      storage_unavailable: Y('chatgptUnavailable'),
-      multiple_accounts: Y('chatgptMultipleAccounts'),
-      cancelled: null,
-    }[outcome.error] || Y('chatgptFailure')) : null;
-    return group(null, [
+    var models = connected && c.sharing ? chatgptModelRows() : [];
+    var picked = st.oauthModel && models.some(function (m) { return m.id === st.oauthModel; })
+      ? st.oauthModel : models.length ? models[0].id : null;
+    var choose = function () {
+      if (!picked) return Promise.resolve();
+      return B.chatgptUse({ model: picked }).then(function (result) {
+        st.oauthResult = result;
+        if (!result || !result.ok) { rerender(false); return; }
+        S.ya = { view: 'main' };
+        return refreshStatus().then(function () { return ensureProviders(); }).then(function () { rerender(false); });
+      });
+    };
+    var modelChoices = models.length ? h('div', { class: 'set-block', 'data-key': 'chatgpt-models' },
+      modelList({ model: picked, effort: null }, models, false, function (mid) {
+        st.oauthModel = mid;
+        rerender(false);
+      }, !!st.oauthAllModels, function () {
+        st.oauthAllModels = !st.oauthAllModels;
+        rerender(false);
+      }),
+      small(Y('chatgptUse'), choose, { fk: 'chatgpt-use' })
+    ) : connected && c.sharing ? h('div', { class: 'set-block' },
+      h('span', { class: 'set-sub', text: modelDiscoveryLine() })) : null;
+    return [authLine, group(null, [
       stackRow('chatgpt-row', Y('chatgptLabel'), [
-        h('span', { class: 'set-main', text: S.chatgptBusy ? Y('chatgptConnecting') : state }),
-        c.ok === false ? null : h('span', { class: 'set-sub', text: active ? Y('chatgptActive') : Y('chatgptNotActive') }),
-        modelFailure ? h('span', { class: 'set-sub', text: modelFailure }) : null,
-        message ? rowLine('bad', message, outcome) : null,
+        h('span', { class: 'set-main', text: S.chatgptBusy ? Y('chatgptConnecting') : statusLine }),
+        st.oauthResult && st.oauthResult.ok === false
+          ? h('span', { class: 'set-sub', text: Y('chatgptFailure') }) : null,
       ], h('div', { class: 'row' }, actions), 'set-rec'),
-      connected && c.sharing && selected ? h('div', { class: 'row', 'data-key': 'chatgpt-model-choose' },
-        h('select', { class: 'select', id: 'chatgpt-model', 'aria-label': Y('chatgptModel'),
-          onChange: function (e) { S.chatgptModel = e.target.value; } },
-          models.map(function (m) { return h('option', { value: m.id, selected: m.id === selected, text: F.clean(m.name, 80) }); })),
-        small(Y('chatgptUse'), function () {
-          var model = models.some(function (m) { return m.id === S.chatgptModel; }) ? S.chatgptModel : selected;
-          return B.chatgptUse({ model: model }).then(function (result) {
-            S.chatgptResult = stamp(result || { ok: false });
-            if (!result || !result.ok) { rerender(false); return; }
-            return Promise.all([refreshStatus(), ensureProviders(), B.chatgptStatus(), B.chatgptModels()]).then(function (parts) {
-              S.chatgpt = parts[2]; S.chatgptModels = parts[3]; rerender(false);
-            });
-          });
-        }, { fk: 'chatgpt-use' })
-      ) : null,
-    ], 'chatgpt-group');
+      modelChoices,
+    ], 'chatgpt-group')];
   }
 
   PAGES.provider = function () {
-    return Promise.all([ensureProviders(), B.usage({ days: 1 }), B.caps(), B.chatgptStatus(), B.chatgptModels()]).then(function (res) {
+    return Promise.all([ensureProviders(), B.usage({ days: 1 }), B.caps(), B.chatgptStatus()]).then(function (res) {
       S.chatgpt = res[3] && res[3].error !== 'unsupported' ? res[3] : null;
-      S.chatgptModels = res[4] && res[4].error !== 'unsupported' ? res[4] : null;
       var u = isErr(res[1]) ? {} : res[1];
       var caps = isErr(res[2]) ? null : res[2];
       var p = P();
@@ -3037,7 +3091,8 @@
       // The picker: step 2's rows and actions, here.
       if (ya.view === 'pick') {
         var pst = KS('pick');
-        return pageNode('page-pick', back, [pickHead(Y('title'), pst), aiRows(pst, 'pick'), aiActions(pst, 'pick'), slotLine(pst, 'pick')]);
+        return pageNode('page-pick', back, [pickHead(Y('title'), pst), aiRows(pst, 'pick'),
+          pst.pick === 'openai' ? openaiAuthentication(pst) : [aiActions(pst, 'pick'), slotLine(pst, 'pick')]]);
       }
       if (ya.view === 'custom') {
         if (!ya.customState) ya.customState = { custom: ya.custom || null, customResult: null, busy: null };
@@ -3047,7 +3102,6 @@
         return pageNode('page-yourai', { left: [], right: [] }, [
           title(Y('title')), para(Y('emptyLine'), 'lead'),
           setupInProgress() ? null : h('div', { class: 'actions', 'data-key': 'actions' }, primary(Y('connectBtn'), openChange, { fk: 'connect-ai' })),
-          chatgptGroup(),
         ]);
       }
       var local = isLocal(cur.id);
@@ -3072,6 +3126,11 @@
       var rt0 = ya.nowTest;
       var retiredLine = retiredNow && rt0 && !rt0.ok && stillId('model_retired', rt0) ? rowLine('bad', T(stillId('model_retired', rt0), stillVars()), rt0) : null;
       var keyRow = null;
+      if (oauth) {
+        keyRow = stackRow('key-row', Y('authenticationLabel'),
+          h('span', { class: 'set-main', text: Y('chatgptMode') }),
+          small(Y('changeBtn'), openChange, { fk: 'change-auth' }), 'set-rec');
+      }
       if (!keyless) {
         // Out of credit reads No credit (CL-player-55); a key that works has no chip: the mask says it's saved.
         var chipNode = rejected ? chip(Y('rejectedChip'), 'bad') : cur.keyState === 'no_credit' || view() === 'out_of_credit' ? chip(Y('noCreditChip'), 'warn') : cur.keyState === 'missing' ? chip(Y('missingChip'), 'bad') : null;
@@ -3097,6 +3156,13 @@
       var modelRow = null;
       var models = offeredModels(cur.id);
       if (custom) modelRow = h('div', { class: 'set set-bare-row', id: 'model-row', 'data-key': 'set-model' }, data('span', { class: 'set-main mono', text: F.clean(cur.model, 60) }));
+      else if (oauth && !models.length) {
+        if (S.chatgpt && S.chatgpt.status === 'connected' && S.chatgpt.sharing &&
+            !S.chatgptModels && !S.chatgptModelsBusy) loadChatGPTModels();
+        modelRow = stackRow('model-unavailable', Y('modelLabel'),
+          h('span', { class: 'set-sub', text: modelDiscoveryLine() }),
+          small(Y('chatgptRetryModels'), loadChatGPTModels, { fk: 'chatgpt-retry-models' }), 'set-rec');
+      }
       else if (models.length) {
         var chosen = ya.chosen;
         var pick = function (mid) {
@@ -3158,7 +3224,6 @@
         group(null, [aiRow, keyRow], 'ai-group'),
         modelBlock,
         spendGroup(u, caps, cur),
-        chatgptGroup(),
       ]);
     });
   };

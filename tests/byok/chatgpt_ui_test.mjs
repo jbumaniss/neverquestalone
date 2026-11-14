@@ -1,4 +1,4 @@
-// ChatGPT subscription connection controls: these are separate from API-key providers.
+// ChatGPT plan authentication uses the existing provider Switch and model list.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { pageRig } from './helpers/page-rig.mjs';
@@ -10,90 +10,108 @@ const READY = {
 };
 const row = rig => rig.document.getElementById('chatgpt-row');
 const action = (rig, name) => rig.document.querySelector('[data-fk="' + name + '"]');
+const catalog = [{ id: 'gpt-test', name: 'GPT Test' }, { id: 'gpt-another', name: 'Another GPT' }];
+const service = overrides => ({
+  status: () => ({ ok: true, status: 'connected', sharing: true }),
+  models: async () => ({ ok: true, models: catalog }),
+  signIn: async () => ({ ok: true, status: 'connected' }),
+  disconnect: () => ({ ok: true, status: 'disconnected' }),
+  cancelSignIn: () => ({ ok: true }),
+  ...overrides,
+});
+async function pickOpenAI(rig) {
+  await rig.press(action(rig, 'change-ai'));
+  await rig.press(action(rig, 'card-openai'));
+}
 
-test('Your AI keeps legacy layout when ChatGPT integration is absent', async () => {
-  const rig = await pageRig({ state: READY, hash: 'provider' });
+test('Your AI keeps the existing layout; no duplicate ChatGPT model/account card', async () => {
+  const rig = await pageRig({ state: READY, hash: 'provider', chatgpt: service() });
   assert.equal(row(rig), null);
   assert.deepEqual(rig.document.querySelectorAll('#page .set-key').map(e => e.textContent),
     ['AI', 'Key', 'Model', 'Today', 'Daily limit']);
+  await pickOpenAI(rig);
+  assert.ok(action(rig, 'openai-auth-key'));
+  assert.ok(action(rig, 'openai-auth-oauth'));
+  assert.ok(row(rig));
+  assert.ok(action(rig, 'chatgpt-use'));
+  assert.ok(action(rig, 'model-gpt-test'));
+  assert.ok(action(rig, 'model-gpt-another'));
 });
 
-test('ChatGPT sign-in is separate from an OpenAI API key and never changes the selected AI', async () => {
-  let status = { ok: true, status: 'disconnected', sharing: false };
-  const chatgpt = {
-    status: () => status,
-    signIn: async () => {
-      status = { ok: true, status: 'connected', sharing: true,
-        clientId: 'oaiapp_testclient123', subject: 'safe-subject' };
-      return status;
-    },
-    disconnect: () => { status = { ok: true, status: 'disconnected', sharing: false }; return status; },
-    cancelSignIn: () => ({ ok: true }),
-    models: async () => ({ ok: true, models: [{ id: 'gpt-test', name: 'GPT Test' }] }),
-  };
-  const rig = await pageRig({ state: READY, hash: 'provider', chatgpt });
-  assert.match(row(rig).textContent, /ChatGPT accountNot connected/);
-  assert.ok(action(rig, 'chatgpt-signin'));
-  await rig.press(action(rig, 'chatgpt-signin'));
-  assert.match(row(rig).textContent, /Connected/);
-  assert.match(row(rig).textContent, /Choose a model to use ChatGPT in WoW/);
+test('Switch uses one provider picker with API key or ChatGPT plan modes', async () => {
+  const rig = await pageRig({ state: READY, hash: 'provider', chatgpt: service() });
+  await pickOpenAI(rig);
+  await rig.press(action(rig, 'openai-auth-key'));
+  assert.equal(action(rig, 'chatgpt-use'), null);
+  assert.ok(action(rig, 'paste-key'), 'existing API key flow is reused');
+  await rig.press(action(rig, 'openai-auth-oauth'));
+  assert.equal(action(rig, 'paste-key'), null, 'OAuth must never be pasted as an API key');
   assert.ok(action(rig, 'chatgpt-use'));
-  let useModel = null;
-  rig.ctx.api.chooseChatGPT = async ({ model }) => { useModel = model; return { ok: true, model }; };
+  let selected = null;
+  rig.ctx.api.chooseChatGPT = async ({ model }) => { selected = model; return { ok: true, model }; };
   await rig.press(action(rig, 'chatgpt-use'));
-  assert.equal(useModel, 'gpt-test');
-  assert.ok(!row(rig).textContent.includes('safe-subject'));
-  assert.match(rig.document.getElementById('ai-row').textContent, /Claude/);
-  assert.ok(action(rig, 'chatgpt-disconnect'));
-  await rig.press(action(rig, 'chatgpt-disconnect'));
-  assert.match(row(rig).textContent, /Not connected/);
-  assert.equal(rig.confirms.length, 3);
+  assert.equal(selected, 'gpt-test');
+  assert.equal(rig.confirms.length, 1, 'native consent required before activating ChatGPT');
 });
 
-test('missing plan permission and unavailable encryption are displayed without pretending to connect', async () => {
-  const noPermission = await pageRig({
-    state: READY, hash: 'provider', chatgpt: {
-      status: () => ({ ok: true, status: 'connected', sharing: false }),
-    },
-  });
-  assert.match(row(noPermission).textContent, /plan permission not granted/);
-  const noEncryption = await pageRig({
-    state: READY, hash: 'provider', chatgpt: {
-      status: () => ({ ok: false, error: 'storage_unavailable' }),
-    },
-  });
-  assert.match(row(noEncryption).textContent, /Secure ChatGPT sign-in is unavailable/);
-  assert.equal(action(noEncryption, 'chatgpt-signin'), null);
-});
-
-
-test('model discovery errors show safe HTTP status and can be retried', async () => {
-  let status = { ok: true, status: 'connected', sharing: true };
-  let attempts = 0;
-  const chatgpt = {
-    status: () => status,
-    models: async () => ++attempts === 1
-      ? { ok: false, error: 'service_unavailable', httpStatus: 520 }
-      : { ok: true, models: [{ id: 'gpt-test', name: 'GPT Test' }] },
-    signIn: async () => ({ ok: true }),
-    disconnect: () => ({ ok: true }),
-  };
-  const rig = await pageRig({ state: READY, hash: 'provider', chatgpt });
-  assert.match(row(rig).textContent, /Could not load ChatGPT models\. \(HTTP 520\)/);
-  assert.equal(action(rig, 'chatgpt-use'), null, 'do not allow model activation on discovery error');
-  assert.ok(action(rig, 'chatgpt-retry-models'));
-  await rig.press(action(rig, 'chatgpt-retry-models'));
-  assert.equal(attempts, 2);
+test('model discovery never blocks the Your AI page or Claude Switch selection', async () => {
+  let resolveModels;
+  let calls = 0;
+  const pending = new Promise(resolve => { resolveModels = resolve; });
+  const rig = await pageRig({ state: READY, hash: 'provider', chatgpt: service({
+    models: () => { calls++; return pending; },
+  }) });
+  assert.ok(action(rig, 'change-ai'));
+  assert.equal(calls, 0);
+  await rig.press(action(rig, 'change-ai'));
+  assert.equal(calls, 0);
+  await rig.press(action(rig, 'card-openai'));
+  assert.equal(calls, 1);
+  assert.match(rig.document.querySelector('#page').textContent, /Loading models/);
+  resolveModels({ ok: true, models: catalog });
+  await rig.settle(20);
   assert.ok(action(rig, 'chatgpt-use'));
-  assert.ok(!row(rig).textContent.includes('HTTP 520'));
 });
 
-test('empty model catalog shows an explanation and retry, not a misleading model picker', async () => {
-  const rig = await pageRig({ state: READY, hash: 'provider', chatgpt: {
-    status: () => ({ ok: true, status: 'connected', sharing: true }),
-    models: async () => ({ ok: true, models: [] }),
-  } });
-  assert.match(row(rig).textContent, /No ChatGPT models available/);
-  assert.ok(action(rig, 'chatgpt-retry-models'));
+test('model discovery failures are visible and retryable in Switch, never fall back to API models', async () => {
+  let calls = 0;
+  const rig = await pageRig({ state: READY, hash: 'provider', chatgpt: service({
+    models: async () => ++calls === 1
+      ? { ok: false, error: 'service_unavailable', httpStatus: 520 }
+      : { ok: true, models: catalog },
+  }) });
+  await pickOpenAI(rig);
+  assert.match(rig.document.querySelector('#page').textContent, /HTTP 520/);
+  assert.equal(action(rig, 'chatgpt-use'), null);
+  await rig.press(action(rig, 'chatgpt-retry-models'));
+  assert.equal(calls, 2);
+  assert.ok(action(rig, 'chatgpt-use'));
+});
+
+test('disconnected and missing-plan-permission OAuth accounts cannot activate a model', async () => {
+  const disconnected = await pageRig({ state: READY, hash: 'provider', chatgpt: service({
+    status: () => ({ ok: true, status: 'disconnected', sharing: false }),
+  }) });
+  await pickOpenAI(disconnected);
+  await disconnected.press(action(disconnected, 'openai-auth-oauth'));
+  assert.match(row(disconnected).textContent, /Not connected/);
+  assert.ok(action(disconnected, 'chatgpt-signin'));
+  assert.equal(action(disconnected, 'chatgpt-use'), null);
+  const noPermission = await pageRig({ state: READY, hash: 'provider', chatgpt: service({
+    status: () => ({ ok: true, status: 'connected', sharing: false }),
+  }) });
+  await pickOpenAI(noPermission);
+  assert.match(row(noPermission).textContent, /plan permission not granted/);
+  assert.equal(action(noPermission, 'chatgpt-use'), null);
+});
+
+test('unavailable credential encryption cannot show sign-in controls', async () => {
+  const rig = await pageRig({ state: READY, hash: 'provider', chatgpt: service({
+    status: () => ({ ok: false, error: 'storage_unavailable' }),
+  }) });
+  await pickOpenAI(rig);
+  await rig.press(action(rig, 'openai-auth-oauth'));
+  assert.match(row(rig).textContent, /Secure ChatGPT sign-in is unavailable/);
+  assert.equal(action(rig, 'chatgpt-signin'), null);
   assert.equal(action(rig, 'chatgpt-use'), null);
 });

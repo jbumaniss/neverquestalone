@@ -50,9 +50,13 @@ async function collect(generator) {
 
 test('lists only account-visible ChatGPT plan models, with no Platform project header', async () => {
   const f = fixture();
+  assert.equal(f.direct.cachedModels(), null);
   assert.deepEqual(await f.direct.listModels(), [
     { id: 'gpt-test', name: 'GPT Test' },
     { id: 'gpt-other', name: 'Another model' },
+  ]);
+  assert.deepEqual(f.direct.cachedModels(), [
+    { id: 'gpt-test', name: 'GPT Test' }, { id: 'gpt-other', name: 'Another model' },
   ]);
   assert.equal(f.calls.length, 1);
   assert.equal(f.calls[0].url, CHATGPT_MODELS_URL);
@@ -63,6 +67,7 @@ test('lists only account-visible ChatGPT plan models, with no Platform project h
   await f.direct.listModels();
   assert.equal(f.calls.length, 1, 'brief cache avoids repeated discovery');
   f.direct.invalidateModels();
+  assert.equal(f.direct.cachedModels(), null);
   await f.direct.listModels();
   assert.equal(f.calls.length, 2);
 });

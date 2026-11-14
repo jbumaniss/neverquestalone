@@ -92,3 +92,18 @@ test('failed exchange never includes response data in error message', async () =
   const f = fakeFetch(null, { tokenResponse: new Response('secret-do-not-echo', { status: 400 }) });
   await assert.rejects(exchangeChatGPTCode({ callback: { code: 'code', clientId }, transaction: tx, fetchFn: f.fetchFn, now: () => NOW }), error => !error.message.includes('secret-do-not-echo'));
 });
+
+test('refresh ID token requires the previous verified subject even without a browser nonce', async () => {
+  const f = fakeFetch();
+  const refreshed = jwt({ nonce: undefined });
+  const verified = await verifyChatGPTIdToken(refreshed, {
+    clientId, nonce: null, expectedSubject: 'subject1', fetchFn: f.fetchFn, now: () => NOW,
+  });
+  assert.equal(verified.subject, 'subject1');
+  await assert.rejects(verifyChatGPTIdToken(refreshed, {
+    clientId, nonce: null, expectedSubject: 'another', fetchFn: f.fetchFn, now: () => NOW,
+  }), /selected account/);
+  await assert.rejects(verifyChatGPTIdToken(refreshed, {
+    clientId, nonce: null, fetchFn: f.fetchFn, now: () => NOW,
+  }), /verification context/);
+});

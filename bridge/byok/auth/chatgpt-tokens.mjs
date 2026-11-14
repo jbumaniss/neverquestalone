@@ -59,7 +59,9 @@ export async function verifyChatGPTIdToken(idToken, {
   clientId, nonce, expectedSubject = null, accessToken = null,
   fetchFn = globalThis.fetch, now = Date.now,
 } = {}) {
-  if (!CLIENT_ID.test(clientId ?? '') || typeof nonce !== 'string' || !nonce) fail('missing token verification context');
+  // Refresh grants have no browser nonce; require an already verified account subject instead.
+  const refreshing = nonce === null && typeof expectedSubject === 'string' && expectedSubject.length > 0;
+  if (!CLIENT_ID.test(clientId ?? '') || (!refreshing && (typeof nonce !== 'string' || !nonce))) fail('missing token verification context');
   if (typeof idToken !== 'string' || idToken.length > 32_768) fail('invalid ID token');
   const segments = idToken.split('.');
   if (segments.length !== 3 || segments.some(v => !v)) fail('invalid ID token');
@@ -111,7 +113,7 @@ export async function verifyChatGPTIdToken(idToken, {
       !Number.isInteger(claims.exp) || claims.exp <= seconds - CLOCK_SKEW_SECONDS ||
       !Number.isInteger(claims.iat) || claims.iat > seconds + CLOCK_SKEW_SECONDS ||
       (claims.nbf !== undefined && (!Number.isInteger(claims.nbf) || claims.nbf > seconds + CLOCK_SKEW_SECONDS)) ||
-      !sameSecret(claims.nonce, nonce)) fail('invalid ID token identity or claims');
+      (!refreshing && !sameSecret(claims.nonce, nonce))) fail('invalid ID token identity or claims');
   if (expectedSubject !== null && claims.sub !== expectedSubject) fail('signed-in account does not match the selected account');
   if (claims.sid !== undefined && (typeof claims.sid !== 'string' || !claims.sid.trim())) fail('invalid ID token session');
   if (claims.at_hash !== undefined) {

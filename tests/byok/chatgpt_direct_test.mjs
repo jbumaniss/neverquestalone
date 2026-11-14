@@ -193,3 +193,26 @@ test('accepts bounded catalogs larger than the previous 256 KiB cap', async () =
   const out = await f.direct.listModels();
   assert.equal(out.length, 600);
 });
+
+
+test('ChatGPT plan sends the requested Thinking effort via Responses without Platform billing fields', async () => {
+  const f = fixture();
+  const events = await collect(f.direct.stream({ ...request(), effort: 'high' }));
+  assert.equal(events.at(-1).type, 'done');
+  const body = JSON.parse(f.calls.at(-1).options.body);
+  assert.deepEqual(body.reasoning, { effort: 'high' });
+  assert.equal(body.store, false);
+  assert.equal(body.stream, true);
+  assert.equal(body.max_output_tokens, undefined);
+  assert.equal(body.reasoning_effort, undefined);
+});
+
+test('Thinking Off is translated to reasoning.none; unsupported values never reach OpenAI', async () => {
+  const f = fixture();
+  await collect(f.direct.stream({ ...request(), effort: 'off' }));
+  assert.deepEqual(JSON.parse(f.calls.at(-1).options.body).reasoning, { effort: 'none' });
+  const invalid = fixture();
+  const events = await collect(invalid.direct.stream({ ...request(), effort: 'surprise' }));
+  assert.equal(events[0].error.code, 'invalid_reasoning_effort');
+  assert.equal(invalid.calls.length, 0);
+});

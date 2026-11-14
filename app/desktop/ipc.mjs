@@ -566,7 +566,8 @@ export const HANDLERS = {
   chatgptModels: { input: NONE, run: ctx => ctx.chatgpt?.models?.() ?? unsupported },
   chatgptUse: {
     input: obj({ model: { type: 'string', minLength: 1, maxLength: 200,
-      pattern: /^[^\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]{1,200}$/u } }, ['model']),
+      pattern: /^[^\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]{1,200}$/u },
+      effort: { type: 'nullable', of: { type: 'string', enum: THINKING_LEVELS } } }, ['model']),
     prepare: async ctx => {
       const account = ctx.chatgpt?.status?.();
       if (account?.status !== 'connected' || account.sharing !== true) return { ok: false, error: 'sign_in_required' };
@@ -582,7 +583,7 @@ export const HANDLERS = {
       detail: 'NeverQuestAlone will send your game context and chat messages to OpenAI under your ChatGPT plan. Your existing API keys are preserved and will not be billed for these requests.',
       okLabel: 'Use ChatGPT', cancelLabel: 'Cancel',
     }),
-    run: (ctx, v) => ctx.api.chooseChatGPT({ model: v.model }),
+    run: (ctx, v) => ctx.api.chooseChatGPT({ model: v.model, ...(v.effort != null ? { effort: v.effort } : {}) }),
   },
   chatgptSignIn: {
     input: NONE,

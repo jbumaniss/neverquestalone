@@ -129,3 +129,19 @@ test('safe model catalog diagnostic describes the failure without a second provi
   assert.equal(action(rig, 'chatgpt-use'), null);
   assert.ok(action(rig, 'chatgpt-retry-models'));
 });
+
+
+test('OpenAI ChatGPT plan reuses Claude Thinking segmented control for supported models', async () => {
+  const rig = await pageRig({ state: READY, hash: 'provider', chatgpt: service({
+    models: async () => ({ ok: true, models: [{ id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol' }] }),
+  }) });
+  await pickOpenAI(rig);
+  assert.ok(action(rig, 'effort-medium'), 'Thinking has the same control used by Claude');
+  assert.ok(action(rig, 'effort-high'));
+  assert.equal(action(rig, 'effort-off'), null, 'GPT-6.1 Sol does not support Off');
+  await rig.press(action(rig, 'effort-high'));
+  let chosen = null;
+  rig.ctx.api.chooseChatGPT = async choice => { chosen = choice; return { ok: true, ...choice }; };
+  await rig.press(action(rig, 'chatgpt-use'));
+  assert.deepEqual(chosen, { model: 'gpt-6.1-sol', effort: 'high' });
+});

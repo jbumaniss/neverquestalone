@@ -946,10 +946,17 @@ export function createAppApi(opts = {}) {
             const account = typeof opts.chatgpt === 'function' ? opts.chatgpt() : null;
             const cached = account?.cachedModels?.();
             if (Array.isArray(cached)) {
+              // Model capabilities are owned by the existing OpenAI manifest.
+              // Unknown account models remain usable but must not advertise unverified Thinking levels.
+              const knownModels = new Map(modelsOf(t).map(m => [m.id, m]));
               accountModels = cached
                 .filter(m => typeof m?.id === 'string' && typeof m?.name === 'string')
-                .map((m, i) => ({ id: m.id, name: m.name, tier: 'other',
-                  effort: false, efforts: [], priceHint: null, levelDays: null, costRank: null }));
+                .map(m => {
+                  const known = knownModels.get(m.id);
+                  return { id: m.id, name: m.name, tier: 'other',
+                    effort: known?.effort === true, efforts: known?.efforts ?? [],
+                    priceHint: null, levelDays: null, costRank: null };
+                });
             }
           } catch { /* no network and no unverified model fallback */ }
         }
@@ -1078,7 +1085,7 @@ export function createAppApi(opts = {}) {
     },
 
     /** Select ChatGPT plan-backed inference, without reading or changing Platform API keys. */
-    async chooseChatGPT({ model } = {}) {
+    async chooseChatGPT({ model, effort = null } = {}) {
       const get = opts.chatgpt;
       const account = typeof get === 'function' ? get() : null;
       if (!account) return { ok: false, error: 'unsupported' };
@@ -1090,18 +1097,25 @@ export function createAppApi(opts = {}) {
       try { catalog = await account.models(); } catch { return { ok: false, error: 'model_discovery_failed' }; }
       if (catalog?.ok !== true || !Array.isArray(catalog.models)) return { ok: false, error: catalog?.error ?? 'model_discovery_failed' };
       if (typeof model !== 'string' || !catalog.models.some(x => x.id === model)) return { ok: false, error: 'unknown_model' };
+      // Only models explicitly known to support Thinking can accept an effort.
+      // Unknown models still use their server defaults.
+      const allowedLevels = effortLevels(manifest('openai'), model);
+      if (effort != null && (!EFFORT_LEVELS.includes(effort) || !allowedLevels.includes(effort))) {
+        return { ok: false, error: 'invalid_effort' };
+      }
+      const chosenEffort = allowedLevels.length ? (effort ?? nearestEffort(allowedLevels, 'medium')) : null;
 
       const before = { provider: B().provider, model: B().model, effort: B().effort, auth: B().auth };
-      Object.assign(B(), { provider: 'openai', model, effort: null, auth: 'oauth' });
-      try { await S.backend?.setConfig?.({ provider: 'openai', model, effort: null, auth: 'oauth' }); }
+      Object.assign(B(), { provider: 'openai', model, effort: chosenEffort, auth: 'oauth' });
+      try { await S.backend?.setConfig?.({ provider: 'openai', model, effort: chosenEffort, auth: 'oauth' }); }
       catch {
         Object.assign(B(), before);
         return { ok: false, error: 'failed' };
       }
       persist();
       changed();
-      log('app-chatgpt-selected', { model });
-      return { ok: true, model };
+      log('app-chatgpt-selected', { model, effort: chosenEffort });
+      return { ok: true, model, effort: chosenEffort };
     },
 
     /** A sign-in or disconnect can change whether queued WoW turns may run. */

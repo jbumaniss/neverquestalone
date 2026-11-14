@@ -102,7 +102,7 @@ test('app chooses only models returned by ChatGPT, persists OAuth mode and switc
   t.after(() => api.stop?.());
   assert.deepEqual(await api.chooseChatGPT({ model: 'not-granted' }), { ok: false, error: 'unknown_model' });
   assert.equal(config.byok.provider, 'anthropic');
-  assert.deepEqual(await api.chooseChatGPT({ model: 'gpt-test' }), { ok: true, model: 'gpt-test' });
+  assert.deepEqual(await api.chooseChatGPT({ model: 'gpt-test' }), { ok: true, model: 'gpt-test', effort: null });
   assert.deepEqual(updates.at(-1), { provider: 'openai', model: 'gpt-test', effort: null, auth: 'oauth' });
   assert.equal(writes.at(-1).byok.auth, 'oauth');
   assert.equal((await api.providers()).find(p => p.id === 'openai').auth, 'oauth');
@@ -121,4 +121,40 @@ test('a forged OAuth flag cannot switch Anthropic or another API-key provider to
   assert.equal(settingsOf({ provider: 'google', auth: 'oauth' }).auth, 'key');
   assert.equal(settingsOf({ provider: 'openai', auth: 'oauth' }).auth, 'oauth');
   assert.equal(settingsOf({ provider: 'openai', auth: 'key' }).auth, 'key');
+});
+
+
+test('ChatGPT Thinking reuses the manifest levels, defaults to Medium, and rejects unsupported values', async t => {
+  const dataDir = tmpDir('nqa-chatgpt-thinking-');
+  t.after(() => fs.rmSync(dataDir, { recursive: true, force: true }));
+  const config = configWithDefaults({ byok: { provider: 'anthropic', model: 'claude-sonnet-5-5', auth: 'key' } });
+  const changes = [];
+  const account = makeAccount({
+    models: async () => ({ ok: true, models: [{ id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol' }] }),
+    cachedModels: () => [{ id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol' }],
+  });
+  const api = createAppApi({
+    backend: { setConfig: async next => { changes.push(next); return next; } },
+    config, keystore: createKeyStore({ backend: 'memory' }),
+    chatgpt: () => account, paths: { userData: dataDir }, saveConfig: () => {},
+  });
+  t.after(() => api.stop?.());
+  assert.deepEqual(await api.chooseChatGPT({ model: 'gpt-6.1-sol', effort: 'off' }),
+    { ok: false, error: 'invalid_effort' });
+  assert.deepEqual(await api.chooseChatGPT({ model: 'gpt-6.1-sol', effort: 'minimal' }),
+    { ok: false, error: 'invalid_effort' });
+  assert.deepEqual(await api.chooseChatGPT({ model: 'gpt-6.1-sol', effort: 'nonsense' }),
+    { ok: false, error: 'invalid_effort' });
+  assert.equal(changes.length, 0, 'invalid effort must not modify saved provider configuration');
+  assert.deepEqual(await api.chooseChatGPT({ model: 'gpt-6.1-sol' }),
+    { ok: true, model: 'gpt-6.1-sol', effort: 'medium' });
+  assert.deepEqual(changes.at(-1), { provider: 'openai', model: 'gpt-6.1-sol', effort: 'medium', auth: 'oauth' });
+  assert.deepEqual(await api.chooseChatGPT({ model: 'gpt-6.1-sol', effort: 'high' }),
+    { ok: true, model: 'gpt-6.1-sol', effort: 'high' });
+  assert.deepEqual(changes.at(-1), { provider: 'openai', model: 'gpt-6.1-sol', effort: 'high', auth: 'oauth' });
+  const openai = (await api.providers()).find(p => p.id === 'openai');
+  assert.equal(openai.auth, 'oauth');
+  assert.equal(openai.models[0].effort, true);
+  assert.deepEqual(openai.models[0].efforts, ['low', 'medium', 'high', 'xhigh', 'max']);
+  assert.equal(openai.models[0].priceHint, null, 'subscription UI must not show Platform token pricing');
 });

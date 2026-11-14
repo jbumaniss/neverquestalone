@@ -627,7 +627,9 @@
    */
   function chooseModel(cur, mid) {
     var mm = modelById(cur.id, mid) || {};
-    if (cur.id === 'openai' && cur.auth === 'oauth') return B.chatgptUse({ model: mid });
+    if (cur.id === 'openai' && cur.auth === 'oauth') return B.chatgptUse({
+      model: mid, ...(mm.effort ? { effort: nearestLevel(levelsOf(mm), cur.effort || 'medium') } : {}),
+    });
     return B.choose({ provider: cur.id, model: mid, effort: mm.effort ? (nearestLevel(levelsOf(mm), cur.effort || 'low') || 'low') : null });
   }
   /** A notice's Use <model>: the pick, then Your AI at its models with the result under them, as a pick there shows it. */
@@ -2962,10 +2964,15 @@
   function chatgptModelRows() {
     var r = S.chatgptModels;
     if (!r || !r.ok || !Array.isArray(r.models)) return [];
+    var openai = providerById('openai');
+    var known = openai && Array.isArray(openai.apiModels) ? openai.apiModels
+      : openai && Array.isArray(openai.models) ? openai.models : [];
     return r.models.filter(function (m) { return m && typeof m.id === 'string' && typeof m.name === 'string'; })
-      .map(function (m, i) {
+      .map(function (m) {
+        var meta = known.find(function (k) { return k.id === m.id; });
         return { id: m.id, name: m.name, tier: 'other',
-          effort: false, efforts: [], priceHint: null, levelDays: null, costRank: null };
+          effort: !!(meta && meta.effort), efforts: meta && meta.efforts || [],
+          priceHint: null, levelDays: null, costRank: null };
       });
   }
   function modelDiscoveryLine() {
@@ -3004,6 +3011,7 @@
     ], st.authMode, function (method) {
       st.authMode = method;
       st.oauthModel = null;
+      st.oauthEffort = null;
       st.oauthResult = null;
       if (method === 'oauth' && S.chatgpt && S.chatgpt.status === 'connected' && S.chatgpt.sharing &&
           !S.chatgptModels && !S.chatgptModelsBusy) loadChatGPTModels();
@@ -3058,9 +3066,12 @@
     var models = connected && c.sharing ? chatgptModelRows() : [];
     var picked = st.oauthModel && models.some(function (m) { return m.id === st.oauthModel; })
       ? st.oauthModel : models.length ? models[0].id : null;
+    var selectedMeta = models.find(function (m) { return m.id === picked; });
+    var levels = selectedMeta && selectedMeta.effort ? levelsOf(selectedMeta) : [];
+    var selectedEffort = levels.length ? nearestLevel(levels, st.oauthEffort || 'medium') : null;
     var choose = function () {
       if (!picked) return Promise.resolve();
-      return B.chatgptUse({ model: picked }).then(function (result) {
+      return B.chatgptUse({ model: picked, ...(selectedEffort ? { effort: selectedEffort } : {}) }).then(function (result) {
         st.oauthResult = result;
         if (!result || !result.ok) { rerender(false); return; }
         S.ya = { view: 'main' };
@@ -3068,13 +3079,20 @@
       });
     };
     var modelChoices = models.length ? h('div', { class: 'set-block', 'data-key': 'chatgpt-models' },
-      modelList({ model: picked, effort: null }, models, false, function (mid) {
+      modelList({ model: picked, effort: selectedEffort }, models, false, function (mid) {
         st.oauthModel = mid;
+        st.oauthEffort = null;
         rerender(false);
       }, !!st.oauthAllModels, function () {
         st.oauthAllModels = !st.oauthAllModels;
         rerender(false);
       }),
+      levels.length ? h('div', { class: 'set-block', id: 'effort-row', 'data-key': 'set-effort' },
+        h('span', { class: 'set-key', text: Y('thinkingLabel') }),
+        segmented('effort', Y('thinkingLabel'),
+          levels.map(function (level) { return { key: level, name: levelLabel(level) }; }),
+          selectedEffort, function (level) { st.oauthEffort = level; rerender(false); }, true)
+      ) : null,
       small(Y('chatgptUse'), choose, { fk: 'chatgpt-use' })
     ) : connected && c.sharing ? h('div', { class: 'set-block' },
       h('span', { class: 'set-sub', text: modelDiscoveryLine() })) : null;
@@ -3199,7 +3217,9 @@
         effortGroup = h('div', { class: 'set-block', id: 'effort-row', 'data-key': 'set-effort' },
           h('span', { class: 'set-key', text: Y('thinkingLabel') }),
           segmented('effort', Y('thinkingLabel'), lv.map(function (l) { return { key: l, name: levelLabel(l) }; }), curLv, function (e) {
-            B.choose({ provider: cur.id, model: cur.model, effort: e }).then(refreshStatus).then(function () { rerender(false, function () { focusEl(document.getElementById('effort-' + e)); }); });
+            (oauth ? B.chatgptUse({ model: cur.model, effort: e })
+              : B.choose({ provider: cur.id, model: cur.model, effort: e }))
+              .then(refreshStatus).then(function () { rerender(false, function () { focusEl(document.getElementById('effort-' + e)); }); });
           }, true),
           // The level's cost is data, as each row's cost is.
           lvDay ? h('p', { class: 'set-sub seg-note' }, data('span', null, keepWhole(Y('thinkingDayLine', { level: levelLabel(curLv), dayCost: lvDay.text })))) : null);

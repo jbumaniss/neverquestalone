@@ -20,7 +20,10 @@ function fixture({ confirm = true, chatgpt = null } = {}) {
   const ipc = createIpc({
     chatgpt: mock,
     api: {
-      chooseChatGPT: async ({ model }) => { calls.push('use:' + model); return { ok: true, model }; },
+      chooseChatGPT: async ({ model, effort }) => {
+        calls.push('use:' + model + (effort ? ':' + effort : ''));
+        return { ok: true, model, ...(effort ? { effort } : {}) };
+      },
       chatgptChanged: async () => { calls.push('changed'); return { ok: true }; },
       status: async () => ({ backend: { provider: { id: 'anthropic', auth: 'key' } } }),
     },
@@ -97,4 +100,14 @@ test('an opaque catalog model ID can be selected without accepting arbitrary cre
   assert.deepEqual(await f.ipc.call('chatgptUse', { model }), { ok: true, model });
   assert.deepEqual(f.calls, ['use:' + model]);
   assert.equal((await f.ipc.call('chatgptUse', { model: model + 'x'.repeat(50) })).error, 'bad_input');
+});
+
+
+test('Thinking selection accepts only known levels and never accepts arbitrary API key fields', async () => {
+  const f = fixture();
+  assert.deepEqual(await f.ipc.call('chatgptUse', { model: 'gpt-6.1-sol', effort: 'high' }),
+    { ok: true, model: 'gpt-6.1-sol', effort: 'high' });
+  assert.deepEqual(f.calls, ['use:gpt-6.1-sol:high']);
+  assert.equal((await f.ipc.call('chatgptUse', { model: 'gpt-6.1-sol', effort: 'unlimited' })).error, 'bad_input');
+  assert.equal((await f.ipc.call('chatgptUse', { model: 'gpt-6.1-sol', effort: 'high', token: 'leak' })).error, 'bad_input');
 });

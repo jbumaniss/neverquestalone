@@ -15,6 +15,7 @@ const MAX_CATALOG_BYTES = 2 * 1024 * 1024;
 const MAX_MODELS = 2000;
 const MODEL_TIMEOUT_MS = 20_000;
 const RESPONSE_TIMEOUT_MS = 180_000;
+const REASONING_LEVELS = new Set(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
 
 function fault(code, status = undefined, catalogReason = undefined) {
   const err = new Error('ChatGPT plan: ' + code);
@@ -121,6 +122,10 @@ export function createChatGPTDirect({ accessToken, fetchFn = globalThis.fetch } 
       yield { type: 'error', error: providerError('invalid_request_shape') };
       return;
     }
+    if (req.effort != null && !REASONING_LEVELS.has(req.effort)) {
+      yield { type: 'error', error: providerError('invalid_reasoning_effort') };
+      return;
+    }
     if (req.system != null && !Array.isArray(req.system)) {
       yield { type: 'error', error: providerError('invalid_request_shape') };
       return;
@@ -149,6 +154,7 @@ export function createChatGPTDirect({ accessToken, fetchFn = globalThis.fetch } 
     const body = {
       model, input: messages.map(m => ({ role: m.role, content: m.content })),
       ...(instructions ? { instructions } : {}),
+      ...(req.effort != null ? { reasoning: { effort: req.effort === 'off' ? 'none' : req.effort } } : {}),
       store: false, stream: true,
     };
     // The ChatGPT plan preview rejects max_output_tokens, unlike Platform API keys.

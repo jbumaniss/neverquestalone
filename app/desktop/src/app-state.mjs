@@ -16,7 +16,7 @@ export const DEFAULT_STATE = Object.freeze({
   onboarded: false,
   notifications: true,
   zoom: 0,
-  updates: { mode: 'notify', auto: true, relaunchHidden: false, neverSince: null, lastReminder: null, lastCheck: null },
+  updates: { mode: 'notify', auto: false, relaunchHidden: false, neverSince: null, lastReminder: null, lastCheck: null },
   noticesSeen: [],
   defaultsSeen: false,
   alertsAsked: false,
@@ -57,7 +57,7 @@ export function normalizeState(raw) {
     zoom: cleanZoom(r.zoom),
     updates: {
       mode: u.mode === 'never' ? 'never' : 'notify',
-      auto: u.auto !== false, // Install updates automatically (Settings), on unless turned off (1.4.6)
+      auto: false, // Personal fork: never honor old unattended-update preferences.
       relaunchHidden: u.relaunchHidden === true, // a quiet install's relaunch opens no window (main.mjs)
       neverSince: num(u.neverSince),
       lastReminder: num(u.lastReminder),

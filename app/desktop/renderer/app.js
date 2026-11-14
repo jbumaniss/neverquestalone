@@ -3559,13 +3559,6 @@
           rerender(false, function () { focusEl(document.getElementById('sw-notifications')); });
         });
       };
-      var setAutoUpdate = function (onNow) {
-        B.setUpdateAuto({ on: onNow }).then(function (r) {
-          if (!isErr(r) && r && r.status) S.updates = r.status;
-          S.settingsResult.updates = stamp(isErr(r) ? Object.assign({ again: function () { setAutoUpdate(onNow); } }, r || { ok: false }) : { ok: true });
-          rerender(false, function () { focusEl(document.getElementById('sw-auto-install')); });
-        });
-      };
       var held = li.status && li.status !== 'enabled' && li.status !== 'not-registered' && li.openAtLogin;
       var loginSmall = !li.supported ? para(ST('loginDevLine'), 'set-sub') : held && isMac() ? para(ST('loginHeldLine', { loginPane: T(F.loginPaneName(info.osRelease)) }), 'set-sub') : null;
       var saved = tr && Number.isInteger(tr.retentionDays) ? tr.retentionDays : 30;
@@ -3622,7 +3615,7 @@
         group(null, [
           stackRow('login-row', ST('loginLabel'), [loginSmall, settingsLine('login')], switchBtn('sw-login', ST('loginLabel'), !!(li.supported && li.openAtLogin), setLogin, !li.supported)),
           stackRow('notes-row', ST('notificationsLabel'), [settingsLine('notes')], switchBtn('sw-notifications', ST('notificationsLabel'), !S.appState || S.appState.notifications !== false, setNotes)),
-          stackRow('auto-updates-row', ST('autoUpdateLabel'), [para(ST('autoUpdateLine'), 'set-sub'), settingsLine('updates')], switchBtn('sw-auto-install', ST('autoUpdateLabel'), upd.auto !== false, setAutoUpdate)),
+          stackRow('auto-updates-row', ST('autoUpdateLabel'), [para(ST('autoUpdateLine'), 'set-sub')], null),
           stackRow('checkins-row', ST('checkInsLabel'), [para(ST('checkInsLine', { name: name }), 'set-sub'), settingsLine('pv-companion')], switchBtn('sw-companion', ST('checkInsLabel'), !!values.companion, function (onNow) { privacyFlip(values, 'companion', onNow); })),
         ], 'general'),
         h('div', { class: 'actions actions-quiet', 'data-key': 'more-toggle' }, toggleMore),

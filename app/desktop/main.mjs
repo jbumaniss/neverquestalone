@@ -720,6 +720,8 @@ async function start() {
     ? idleUpdater({ identity: IDENTITY, prefs, savePrefs, current: app.getVersion(), packaged: app.isPackaged })
     : await startUpdater({
       app, identity: IDENTITY, prefs, savePrefs, log, onChange: s => send(UPDATES_CHANNEL, s), notify: n => notifier.notify(n),
+      // Personal fork: release checks are informational; upstream binaries are never installed.
+      manualUpdatesOnly: true,
       // Automatic updates install only while the game is closed and the window is shut.
       idle: async () => {
         if (win && !win.isDestroyed() && win.isVisible()) return false;

@@ -639,16 +639,16 @@ export const noRelease = e => e?.code === 'ERR_UPDATER_NO_PUBLISHED_VERSIONS' ||
 export async function startUpdater({
   app, identity, prefs, savePrefs, platform = process.platform, log = () => {}, onChange = () => {}, notify = () => {}, now = Date.now,
   timer = globalThis, loadUpdater = defaultLoadUpdater, verifySignature = null, pinsPublisher = pinsPublisherOnDisk,
-  idle = async () => false, beforeInstall = () => {},
+  idle = async () => false, beforeInstall = () => {}, manualUpdatesOnly = false,
 }) {
   const repo = releasesRepo(identity);
   const current = app.getVersion();
   const st = {
     mode: prefs.mode === 'never' ? 'never' : 'notify',
-    auto: prefs.auto !== false,
+    auto: manualUpdatesOnly ? false : prefs.auto !== false,
     configured: repo.configured,
     supported: app.isPackaged && repo.configured,
-    notifyOnly: platform === 'linux', current, state: 'idle', available: null, progress: null,
+    notifyOnly: manualUpdatesOnly || platform === 'linux', current, state: 'idle', available: null, progress: null,
     lastCheck: prefs.lastCheck ?? null, error: null,
   };
   const snapshot = () => ({ ...st, available: st.available ? { ...st.available } : null });
@@ -663,7 +663,7 @@ export async function startUpdater({
     updater.logger = { info: m => log(`updater: ${m}`), warn: m => log(`updater: ${m}`), error: m => log(`updater: ${m}`), debug: () => {} };
     updater.setFeedURL(feedConfig(identity));
     updater.autoDownload = false;
-    updater.autoInstallOnAppQuit = true;
+    updater.autoInstallOnAppQuit = !manualUpdatesOnly;
     updater.allowDowngrade = false;
     updater.allowPrerelease = /-/.test(current);
     updater.fullChangelog = false;
@@ -675,7 +675,7 @@ export async function startUpdater({
     if (platform === 'win32') updater.verifyUpdateCodeSignature = verifySignature ?? strictSignatureVerifier({ log });
     // A Windows build that pins no publisher only notifies, as Linux does: checks still run, so the
     // player still learns of an update, and the release page is where it comes from.
-    if (platform === 'win32' && !(await pinsPublisher(updater))) {
+    if (!manualUpdatesOnly && platform === 'win32' && !(await pinsPublisher(updater))) {
       st.notifyOnly = true;
       updater.autoInstallOnAppQuit = false;
       log('updater: this Windows build pins no publisher, so updates only notify');
@@ -776,6 +776,7 @@ export async function startUpdater({
     },
     /** Automatic updates (Settings): on downloads one already found, and installs a ready one when quiet. */
     setAuto(on) {
+      if (manualUpdatesOnly) return { ok: false, error: 'notify_only', status: snapshot() };
       st.auto = on === true;
       save({ auto: st.auto });
       if (autoOn() && st.state === 'available') timer.setTimeout(() => { ctl.download(); }, 0);
@@ -784,6 +785,7 @@ export async function startUpdater({
       return { ok: true, status: snapshot() };
     },
     installNow() {
+      if (manualUpdatesOnly) return { ok: false, error: 'notify_only' };
       if (!updater || st.state !== 'ready') return { ok: false, error: 'no_update_ready' };
       setImmediate(() => updater.quitAndInstall(false, true));
       return { ok: true };

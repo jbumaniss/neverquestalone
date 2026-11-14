@@ -1085,3 +1085,33 @@ test('automatic updates: found → downloaded → installed at the first quiet m
   assert.equal(dev.setAuto(false).status.auto, false);
   assert.equal(idleSaved.at(-1).auto, false);
 });
+
+test('personal fork: upstream releases notify but cannot download or install, even with legacy auto=true', async () => {
+  const app = { getVersion: () => '0.1.0', isPackaged: true };
+  const events = eventFake();
+  const notes = [];
+  const u = await startUpdater({
+    app, identity: FEED, prefs: { mode: 'notify', auto: true }, savePrefs() {},
+    platform: 'win32', timer: NO_TIMER, manualUpdatesOnly: true,
+    pinsPublisher: async () => { throw new Error('manual mode must not look for a signing publisher'); },
+    loadUpdater: async () => events.fake, notify: n => notes.push(n),
+  });
+  assert.equal(u.status().auto, false);
+  assert.equal(u.status().notifyOnly, true);
+  assert.equal(events.fake.autoInstallOnAppQuit, false);
+  events.handlers['update-available']({ version: '0.2.0' });
+  assert.equal(notes.at(-1).page, 'about');
+  assert.equal(events.calls.download, 0);
+  assert.deepEqual(await u.download(), { ok: false, error: 'notify_only' });
+  assert.deepEqual(u.installNow(), { ok: false, error: 'notify_only' });
+  assert.equal(u.setAuto(true).error, 'notify_only');
+  assert.equal(u.status().auto, false);
+  assert.equal(events.calls.download, 0);
+});
+
+test('personal fork app state: legacy automatic-update setting always normalizes to off', async () => {
+  const { normalizeState } = await import('../../app/desktop/src/app-state.mjs');
+  assert.equal(normalizeState(null).updates.auto, false);
+  assert.equal(normalizeState({ updates: { mode: 'notify', auto: true } }).updates.auto, false);
+  assert.equal(normalizeState({ updates: { mode: 'notify', auto: false } }).updates.mode, 'notify');
+});

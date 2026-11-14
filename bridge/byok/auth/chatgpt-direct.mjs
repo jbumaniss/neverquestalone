@@ -141,9 +141,7 @@ export function createChatGPTDirect({ accessToken, fetchFn = globalThis.fetch } 
       ...(instructions ? { instructions } : {}),
       store: false, stream: true,
     };
-    if (Number.isInteger(req.maxTokens) && req.maxTokens >= 1 && req.maxTokens <= 128000) {
-      body.max_output_tokens = req.maxTokens;
-    }
+    // The ChatGPT plan preview rejects max_output_tokens, unlike Platform API keys.
     let response;
     try {
       response = await fetchFn(CHATGPT_RESPONSES_URL, {
@@ -168,10 +166,22 @@ export function createChatGPTDirect({ accessToken, fetchFn = globalThis.fetch } 
     // Use NeverQuestAlone's established Responses event parser instead of
     // duplicating SSE semantics. Only response.completed yields successful done.
     try {
-      yield* responsesParse(response, {
-        fail: () => providerError('response_failed'),
+      for await (const event of responsesParse(response, {
+        fail: data => {
+          const code = data?.response?.error?.code ?? data?.error?.code;
+          return providerError(code === 'subscription_sharing_usage_limit_exceeded' ||
+            code === 'subscription_sharing_usage_unavailable' ? 'plan_usage_limited' : 'response_failed');
+        },
         truncated: () => providerError('response_interrupted'),
-      });
+      })) {
+        // The standard API adapter reports response.incomplete as done(length).
+        // ChatGPT plan inference must only finish on response.completed.
+        if (event.type === 'done' && event.finish !== 'stop' && event.finish !== 'refusal') {
+          yield { type: 'error', error: providerError('response_incomplete') };
+          return;
+        }
+        yield event;
+      }
     } catch {
       yield { type: 'error', error: providerError('response_interrupted') };
     }

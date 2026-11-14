@@ -77,7 +77,7 @@ test('ChatGPT plan request uses Responses streaming, store false and ordinary ba
   const body = JSON.parse(call.options.body);
   assert.deepEqual(body, {
     model: 'gpt-test', input: [{ role: 'user', content: 'Where is my quest?' }],
-    instructions: 'Keep answers short.', store: false, stream: true, max_output_tokens: 512,
+    instructions: 'Keep answers short.', store: false, stream: true,
   });
   assert.equal(events.find(e => e.type === 'text').delta, 'Hi there');
   assert.equal(events.find(e => e.type === 'done').finish, 'stop');
@@ -125,4 +125,29 @@ test('invalid catalog entries and unsupported successful content types are rejec
   const events = await collect(wrong.direct.stream(request()));
   assert.equal(events.at(-1).error.code, 'invalid_response_stream');
   assert.equal(events.some(e => e.type === 'done'), false);
+});
+
+
+test('response.incomplete is not accepted as a successful ChatGPT plan reply', async () => {
+  const wire = [
+    'event: response.output_text.delta',
+    'data: {"type":"response.output_text.delta","delta":"partial"}',
+    '',
+    'event: response.incomplete',
+    'data: {"type":"response.incomplete","response":{"incomplete_details":{"reason":"max_output_tokens"}}}',
+    '', '',
+  ].join('\n');
+  const f = fixture({ streamResponse: sse(wire) });
+  const events = await collect(f.direct.stream(request()));
+  assert.equal(events.some(e => e.type === 'done'), false);
+  assert.equal(events.at(-1).error.code, 'response_incomplete');
+});
+
+test('subscription sharing limit mid-stream stays in the ChatGPT plan route', async () => {
+  const wire = 'event: response.failed\n' +
+    'data: {"type":"response.failed","response":{"error":{"code":"subscription_sharing_usage_limit_exceeded"}}}\n\n';
+  const f = fixture({ streamResponse: sse(wire) });
+  const events = await collect(f.direct.stream(request()));
+  assert.equal(events.at(-1).error.code, 'plan_usage_limited');
+  assert.equal(f.calls.length, 2);
 });

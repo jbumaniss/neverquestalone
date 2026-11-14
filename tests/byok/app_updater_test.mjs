@@ -1116,3 +1116,8 @@ test('personal fork app state: legacy automatic-update setting always normalizes
   assert.equal(normalizeState({ updates: { mode: 'notify', auto: true } }).updates.auto, false);
   assert.equal(normalizeState({ updates: { mode: 'notify', auto: false } }).updates.mode, 'notify');
 });
+
+test('personal fork: packaged entrypoint always selects notification-only updater policy', () => {
+  const main = fs.readFileSync(path.join(APP, 'main.mjs'), 'utf8');
+  assert.match(main, /manualUpdatesOnly:\s*true/, 'the real packaged app must opt out of installing upstream releases');
+});

@@ -12,6 +12,8 @@ const CHAT = 'c3f9a1e';
 const makeAccount = (overrides = {}) => ({
   status: () => ({ ok: true, status: 'connected', sharing: true }),
   models: async () => ({ ok: true, models: [{ id: 'gpt-test', name: 'GPT Test' }] }),
+  // providers() deliberately reads only cached model metadata; it does not perform network discovery.
+  cachedModels: () => [{ id: 'gpt-test', name: 'GPT Test' }],
   async *streamResponse(req) {
     yield { type: 'text', delta: 'The quest is in Mulgore.' };
     yield { type: 'usage', usage: { input: 10, output: 6, exact: false } };

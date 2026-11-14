@@ -35,7 +35,10 @@ test('Your AI keeps the existing layout; no duplicate ChatGPT model/account card
   assert.ok(row(rig));
   assert.ok(action(rig, 'chatgpt-use'));
   assert.ok(action(rig, 'model-gpt-test'));
-  assert.ok(action(rig, 'model-gpt-another'));
+  assert.equal(action(rig, 'model-gpt-another'), null, 'shared picker starts with a short list');
+  assert.ok(action(rig, 'all-models'));
+  await rig.press(action(rig, 'all-models'));
+  assert.ok(action(rig, 'model-gpt-another'), 'remaining models appear after Show all models');
 });
 
 test('Switch uses one provider picker with API key or ChatGPT plan modes', async () => {

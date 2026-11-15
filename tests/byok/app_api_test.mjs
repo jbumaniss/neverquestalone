@@ -766,7 +766,7 @@ test('memory: the characters, one\'s digest (never its folder), forget', async (
   fs.writeFileSync(path.join(dir, 'log.md'), '- 2026-09-26 Reached level 6\n');
   assert.deepEqual(await r.api.memory(), { chars: ['Tavi-Testrealm'] });
   const m = await r.api.memory('Tavi-Testrealm');
-  assert.deepEqual(keysOf(m), ['autoText', 'char', 'digest', 'notes', 'notesText', 'updated']);
+  assert.deepEqual(keysOf(m), ['autoText', 'char', 'digest', 'entries', 'notes', 'notesText', 'updated']);
   assert.equal(m.char, 'Tavi-Testrealm');
   assert.equal(typeof m.digest, 'string');
   assert.ok(!JSON.stringify(m).includes(r.dataDir), 'no folder path');
@@ -793,6 +793,30 @@ test('memory: explicit Save survives creating fresh backend and app API with the
   assert.deepEqual(await reopened.memory(), { chars: [char] });
   assert.equal((await reopened.memory(char)).notesText, '- Remember my rogue build.');
   assert.equal((await reopened.memory(char)).digest.includes('Remember my rogue build'), true);
+});
+
+test('memory: Add creates its own card on disk, preserves extra notes and survives a fresh backend', async (t) => {
+  const r = await rig(t);
+  const char = 'Malderx-CAMWOW EU5 Realm 3 PvE';
+  await r.api.createMemoryCharacter({ char });
+  await r.api.saveMemoryNotes({ char, text: 'Testing persistence' });
+  const added = await r.api.addMemoryEntry({ char, text: 'Remember my Rogue build' });
+  assert.equal(added.ok, true);
+  assert.equal(added.entry.text, 'Remember my Rogue build');
+  assert.match(added.entry.id, /^[0-9a-f-]{36}$/);
+  assert.equal((await r.api.memory(char)).notesText, 'Testing persistence');
+  const filename = path.join(r.dataDir, 'memory', char, 'entries.json');
+  assert.equal(JSON.parse(fs.readFileSync(filename, 'utf8')).entries[0].id, added.entry.id);
+
+  const restartedBackend = createLocalBackend({}, { config: r.config, dataDir: r.dataDir, keystore: r.keystore, checks: { models: false } });
+  const reopened = createAppApi({ backend: restartedBackend, keystore: r.keystore, config: r.config, paths: { userData: r.dataDir } });
+  t.after(async () => { await reopened.stop(); await restartedBackend.stop(); });
+  const loaded = await reopened.memory(char);
+  assert.deepEqual(loaded.entries, [added.entry]);
+  assert.equal(loaded.notesText, 'Testing persistence');
+  assert.match(loaded.digest, /Remember my Rogue build/);
+  assert.equal((await reopened.addMemoryEntry({ char, text: '' })).ok, false);
+  assert.equal((await reopened.addMemoryEntry({ char: '../escape', text: 'oops' })).ok, false);
 });
 
 test('findWow, installAddon (the bridge restarts for a new folder), wowRunning; refused while WoW runs', async (t) => {

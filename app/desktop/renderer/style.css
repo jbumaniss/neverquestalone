@@ -601,6 +601,9 @@ h1 + .group, .lead + .group { margin-top: 24px; }
 .memory-add-row, .memory-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .memory-add-row .input { flex: 1 1 220px; }
 .memory-add-row .btn, .memory-actions .btn { flex: 0 0 auto; }
+.memory-entry-list { display: flex; flex-direction: column; gap: 8px; }
+.memory-entry-card { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); }
+.memory-entry-text { overflow-wrap: anywhere; white-space: pre-wrap; }
 .memory-auto-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
 @media (max-width: 540px) { .memory-create-fields { grid-template-columns: minmax(0, 1fr); } }
 .set {

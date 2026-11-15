@@ -22,6 +22,7 @@
 // and "your realm".
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { FILES, START, END, MEMORY_DIR, memoryDir } from './logbook.mjs';
 import { sanitizeGameString, encodeData } from './sanitize.mjs';
 import { replaceWords } from './pseudonym.mjs';
@@ -36,6 +37,9 @@ export const QUEST_TOKENS = 640;
 const LINE = 200;
 const NOTES_FILE = 'notes.md';
 const NOTES_LIMIT = 4_000;
+const ENTRIES_FILE = 'entries.json';
+const ENTRIES_LIMIT = 100;
+const ENTRY_LIMIT = 500;
 
 /** A digest's size as it's sent: the block's encoding, where each `<` or `>` takes six characters. */
 export const digestTokens = d => (d ? estimateTokens(encodeData(d)) : 0);
@@ -101,7 +105,8 @@ export function digest(char, { dataDir, maxTokens = DIGEST_TOKENS, identity = fa
   const quests = read(path.join(dir, FILES.quests));
   const log = read(path.join(dir, FILES.log));
   const personalNotes = read(path.join(dir, NOTES_FILE));
-  if (character === null && quests === null && log === null && personalNotes === null) return null;
+  const entries = readEntries(dataDir, char);
+  if (character === null && quests === null && log === null && personalNotes === null && !entries.length) return null;
 
   const c = splitFacts(character);
   const q = splitFacts(quests);
@@ -110,7 +115,7 @@ export function digest(char, { dataDir, maxTokens = DIGEST_TOKENS, identity = fa
   if (updated) d.updated = updated[1];
   d.character = c.inside.split('\n').filter(l => /^\s*- /.test(l)).map(item).filter(Boolean);
   d.recent = (log ?? '').split('\n').filter(l => /^\s*- /.test(l)).map(item).filter(Boolean).slice(-recentMax);
-  d.notes = [...playerLines(personalNotes ?? ''), ...playerLines(c.outside), ...playerLines(q.outside)].slice(0, 12);
+  d.notes = [...entries.slice().reverse().map(e => item(e.text)), ...playerLines(personalNotes ?? ''), ...playerLines(c.outside), ...playerLines(q.outside)].filter(Boolean).slice(0, 12);
   d.quests = withQuests ? q.inside.split('\n').filter(l => QUEST_ITEM.test(l)).map(item).filter(Boolean) : [];
   // The quests still in the log (the context's line): only those when it's the whole log, else those first.
   if (live && Array.isArray(live.ids) && d.quests.length) {
@@ -157,6 +162,44 @@ export function digest(char, { dataDir, maxTokens = DIGEST_TOKENS, identity = fa
 export function readNotes(dataDir, char) {
   if (!dataDir || !char?.name) return '';
   return read(path.join(memoryDir(dataDir, char), NOTES_FILE)) ?? '';
+}
+
+/** Individual player memories are separate from the editable notes and game-written facts. */
+export function readEntries(dataDir, char) {
+  if (!dataDir || !char?.name) return [];
+  const file = path.join(memoryDir(dataDir, char), ENTRIES_FILE);
+  try { if (fs.statSync(file).size > 64 * 1024) throw new Error('memory entries too large'); }
+  catch (e) { if (e.code !== 'ENOENT') throw e; }
+  const raw = read(file);
+  if (raw === null) return [];
+  const doc = JSON.parse(raw);
+  if (doc?.version !== 1 || !Array.isArray(doc.entries) || doc.entries.length > ENTRIES_LIMIT ||
+      !doc.entries.every(e => typeof e?.id === 'string' && /^[0-9a-f-]{36}$/.test(e.id) &&
+        typeof e.text === 'string' && e.text.length > 0 && e.text.length <= ENTRY_LIMIT &&
+        typeof e.createdAt === 'string' && !Number.isNaN(Date.parse(e.createdAt)))) {
+    throw new Error('invalid memory entries');
+  }
+  return doc.entries;
+}
+
+export function addEntry(dataDir, char, text) {
+  if (!dataDir || !char?.name || typeof text !== 'string' || !text.trim() || text.length > ENTRY_LIMIT || /[\0\r\n]/.test(text)) {
+    throw new TypeError('invalid memory entry');
+  }
+  const entries = readEntries(dataDir, char);
+  if (entries.length >= ENTRIES_LIMIT) throw new RangeError('memory entries full');
+  const entry = { id: randomUUID(), text, createdAt: new Date().toISOString() };
+  const dir = memoryDir(dataDir, char);
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const file = path.join(dir, ENTRIES_FILE);
+  const temp = path.join(dir, `.${ENTRIES_FILE}.${process.pid}.${Date.now()}.tmp`);
+  try {
+    fs.writeFileSync(temp, JSON.stringify({ version: 1, entries: [...entries, entry] }), { mode: 0o600, flag: 'wx' });
+    fs.renameSync(temp, file);
+  } finally {
+    try { fs.unlinkSync(temp); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  }
+  return entry;
 }
 
 /** Replace personal notes atomically, without touching generated facts or other characters. */
@@ -223,6 +266,8 @@ export function createMemory(dataDir, defaults = {}) {
     digest: (char, opts = {}) => digest(char, { dataDir, ...defaults, ...opts }),
     readNotes: char => readNotes(dataDir, char),
     saveNotes: (char, value) => saveNotes(dataDir, char, value),
+    readEntries: char => readEntries(dataDir, char),
+    addEntry: (char, value) => addEntry(dataDir, char, value),
     create: char => createCharacterMemory(dataDir, char),
     forget: char => forgetMemory(dataDir, char),
     forgetAll: () => forgetAllMemory(dataDir),

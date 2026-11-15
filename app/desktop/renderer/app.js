@@ -3694,7 +3694,7 @@
         var editor = h('textarea', { id: 'memory-notes-editor', class: 'input memory-notes-editor', value: S.memoryNotesDrafts[selected], maxlength: 4000, rows: 7, 'aria-label': 'Character notes', spellcheck: true,
           onInput: function (e) { S.memoryNotesDrafts[selected] = e.target.value; },
         });
-        var saveEdited = function (draft, added) {
+        var saveEdited = function (draft) {
           return B.saveMemoryNotes({ char: selected, text: draft }).then(function (r) {
             if (isErr(r)) return r;
             // A successful IPC reply is not enough: check the stored value the page will read on restart.
@@ -3703,7 +3703,6 @@
             });
           }).catch(function () { return { ok: false, error: 'failed' }; }).then(function (r) {
             if (!isErr(r)) S.memoryNotesDrafts[selected] = draft;
-            if (!isErr(r) && added) S.memoryEntryDrafts[selected] = '';
             S.settingsResult.memoryNotes = stamp(r || { ok: false });
             rerender(false, function () { focusEl(document.getElementById('memory-notes-editor')); });
             return r;
@@ -3715,13 +3714,25 @@
         });
         var addMemory = busyBtn('Add memory', function () {
           var line = String(S.memoryEntryDrafts[selected] || '').trim().replace(/\s+/g, ' ');
-          var existing = String(S.memoryNotesDrafts[selected] || '').trimEnd();
-          if (!line || existing.length + line.length + 3 > 4000) {
-            S.settingsResult.memoryNotes = stamp({ ok: false, error: 'bad_input' });
+          if (!line || line.length > 500) {
+            S.settingsResult.memoryEntry = stamp({ ok: false, error: 'bad_input' });
             rerender(false);
             return;
           }
-          return saveEdited(existing + (existing ? '\n' : '') + '- ' + line, true);
+          S.settingsResult.memoryEntry = null;
+          return B.addMemoryEntry({ char: selected, text: line }).then(function (r) {
+            if (isErr(r) || !r.entry || !r.entry.id) return r && isErr(r) ? r : { ok: false, error: 'failed' };
+            return B.memory({ char: selected }).then(function (check) {
+              return check && check.ok !== false && Array.isArray(check.entries) &&
+                check.entries.some(function (e) { return e.id === r.entry.id && e.text === line; })
+                ? r : { ok: false, error: 'failed' };
+            });
+          }).catch(function () { return { ok: false, error: 'failed' }; }).then(function (r) {
+            if (!isErr(r)) S.memoryEntryDrafts[selected] = '';
+            S.settingsResult.memoryEntry = stamp(r || { ok: false });
+            rerender(false, function () { focusEl(document.getElementById('memory-add-entry')); });
+            return r;
+          });
         }, 'btn btn-quiet', { fk: 'add-memory-entry' });
         // A status push patches the textarea in place, but replaces button handlers; keep the draft in state.
         var save = busyBtn('Save notes', function () { return saveEdited(S.memoryNotesDrafts[selected]); }, 'btn btn-primary', { fk: 'save-memory-notes' });
@@ -3731,12 +3742,22 @@
             ? para(m.autoText, 'memory-auto-text')
             : para('No game facts recorded yet. Play this character to update its history.', 'set-sub')], 'memory-facts'),
           group('Your memories', [
-            para('Add one memory at a time, or edit the notes below. These stay on this computer.', 'set-sub'),
+            para('Add one memory at a time. Each one stays with this character between sessions.', 'set-sub'),
             h('div', { class: 'memory-add-row' }, entry, addMemory),
-            h('div', { class: 'field' }, h('label', { for: 'memory-notes-editor', text: 'Saved notes' }), editor),
+            settingsLine('memoryEntry', 'Memory saved'),
+            h('div', { class: 'memory-entry-list', 'aria-label': 'Saved memories' },
+              Array.isArray(m && m.entries) && m.entries.length
+                ? m.entries.slice().reverse().map(function (e) {
+                  return h('div', { class: 'memory-entry-card', 'data-key': e.id }, para(e.text, 'memory-entry-text'));
+                })
+                : para('No memories added yet.', 'set-sub')),
+          ], 'memory-entries'),
+          group('Extra notes', [
+            para('Optional longer notes for this character. Edit and save them whenever you like.', 'set-sub'),
+            h('div', { class: 'field' }, h('label', { for: 'memory-notes-editor', text: 'Notes' }), editor),
             h('div', { class: 'memory-actions' }, save, clear),
-            settingsLine('memoryNotes', 'Saved to disk'),
-          ], 'memory-notes'),
+            settingsLine('memoryNotes', 'Notes saved'),
+          ], 'memory-extra-notes'),
         ]));
       });
     });

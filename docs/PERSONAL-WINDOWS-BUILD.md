@@ -1,8 +1,9 @@
 # Build the personal NeverQuestAlone Windows app locally
 
 This personal build uses **`main` in the `jbumaniss/neverquestalone` fork**.
-The earlier 1.4.20 integration began at `7bf11e5`; the 1.4.21 changes fix
-character memory restore and add manual creation and entry controls.
+The earlier 1.4.20 integration began at `7bf11e5`; 1.4.21 restored character
+memory reads. The 1.4.22 candidate gives each added memory its own durable card,
+separate from the existing notes editor.
 It is not an upstream release.
 Its packaged application **checks for upstream release notices only**. It never downloads or installs
 upstream binaries. A release notice is not approval to run someone else's build.
@@ -56,9 +57,17 @@ Electron app is not evidence that capture or speech works in a live WoW session.
   The cause was the renderer calling `memory("Name-Realm")` while the IPC contract
   requires `memory({ char: "Name-Realm" })`. Version 1.4.21 fixes the call and
   adds regression coverage for loading saved notes.
-- **Not yet verified:** a packaged 1.4.21 Windows self-test, its installer, or
-  an installed 1.4.21 restart check; live ChatGPT, voice, Questie and Auctionator
-  checks also remain open. Record results only after observing them.
+- The Windows 1.4.21 run at fork `main` `7efe66a`: **2,149 tests, 2,031 passed,
+  118 skipped, 0 failed**, codec round-trip PASS. The capture helper built
+  reproducibly. The packaged self-test returned `ok: true`, `failed: []`, and
+  `packaged: true`. The unsigned installer hash was
+  `22F17CEC3E2CDC8E26A839FE92F92AE269156767D53290168BC6ED216B505693`.
+  An installed relaunch displayed the old note `Testing persistance`, proving
+  notes survived that update; a subsequently added memory did **not** appear
+  after restart and prompted the 1.4.22 follow-up.
+- **Not yet verified:** a Windows 1.4.22 installer and restart test of the
+  separate memory cards; live ChatGPT, voice, Questie and Auctionator checks
+  also remain open. Record results only after observing them.
 - Dependency installation reported **7 moderate npm audit findings** in `app/desktop`.
   Review the advisory paths before changing pinned dependencies; do not run
   `npm audit fix --force` as an unreviewed build step.
@@ -81,11 +90,12 @@ Before the new installer, set existing NeverQuestAlone builds to manual updates/
 because the previous released application can still update itself. The new fork build
 enforces notification-only operation independently of saved preferences.
 
-## Personal fork update: 1.4.21
+## Personal fork update: 1.4.22
 
-The installed 1.4.20 app has the earlier Character memories page, including the
-restore bug. Build and install 1.4.21 to use the corrected page, manual character
-creation and manual Add memory action. Code changes do not update a running app.
+The installed 1.4.21 app restored existing notes, but its Add memory action
+appended to the same text editor and gave no independent card. Build and install
+1.4.22 to verify the new card store (`entries.json`) and separate extra notes.
+Code changes do not update a running app.
 Never install an unsigned personal build on someone else's PC or treat its hash
 as a publisher signature. Existing saved notes must remain intact through the update.
 
@@ -99,10 +109,13 @@ Manual Windows/WoW acceptance, only after the new build is installed. A micropho
 
 1. Sign in with the existing ChatGPT account, send one message and receive one reply.
 2. On Character memories, verify existing Malderx notes appear without re-entering
-   them. Add a memory and Save notes, quit/relaunch, then check the same text is
-   present. Create a second character manually, add a different memory, and verify
-   separation. Play a character and confirm automatic game history fills its
-   separate section. Inputs, buttons and text area must remain spaced and usable.
+   them. Type `Remember my Rogue build` into **Add memory** and click the button:
+   the input must clear and a new card must appear. Quit the entire app and
+   reopen: the card and original notes must both remain. Edit and Save the
+   **Extra notes** separately; neither action may overwrite the other. Create a
+   second character, add a different memory, and verify separation. Play a
+   character and confirm automatically remembered game history fills its own
+   section. Inputs, buttons and textarea must remain spaced and usable.
 3. Under Settings, enable Voice conversation only when wanted. Use **Test speaker**, then
    send typed text and verify a reply can be heard through Windows speakers. Ask in game
    and confirm the desktop reads the reply aloud. Microphone, speech recognition and

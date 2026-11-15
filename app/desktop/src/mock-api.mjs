@@ -544,6 +544,7 @@ export function createMockApi({ now = Date.now, platform = process.platform, del
       if (!s.memoryChars.includes(char)) return { ok: false, error: 'not_found' };
       return {
         char, updated: now() - 2 * 3600e3, notesText: s.memoryNotes?.[char] ?? '',
+        entries: s.memoryEntries?.[char] ?? [],
         autoText: 'Level 6 Tauren Warrior. Working through Mulgore.',
         digest: 'Level 6 Tauren Warrior. Prefers short answers. Working through Mulgore; skipped the Venture Co. chain.',
         notes: [
@@ -556,6 +557,15 @@ export function createMockApi({ now = Date.now, platform = process.platform, del
       if (!s.memoryChars.includes(char) || typeof text !== 'string' || text.length > 4000) return { ok: false, error: 'bad_input' };
       (s.memoryNotes || (s.memoryNotes = {}))[char] = text;
       return { ok: true };
+    },
+    async addMemoryEntry({ char, text }) {
+      const f = forced('addMemoryEntry'); if (f) return f;
+      if (!s.memoryChars.includes(char) || typeof text !== 'string' || !text.trim() || text.length > 500) return { ok: false, error: 'bad_input' };
+      if (!s.memoryEntries) s.memoryEntries = {};
+      const entries = s.memoryEntries[char] || (s.memoryEntries[char] = []);
+      const entry = { id: `00000000-0000-4000-8000-${String(entries.length + 1).padStart(12, '0')}`, text, createdAt: new Date(now()).toISOString() };
+      entries.push(entry);
+      return { ok: true, entry };
     },
     async createMemoryCharacter({ char }) {
       if (typeof char !== 'string' || !char.trim()) return { ok: false, error: 'bad_input' };

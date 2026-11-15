@@ -1822,7 +1822,7 @@ export function createLocalBackend(handlers = {}, opts = {}) {
       if (!c) return { ok: false, error: 'no character' };
       const dir = memory.dir(c);
       const files = [];
-      for (const name of [...Object.values(MEMORY_FILES), 'notes.md']) {
+      for (const name of [...Object.values(MEMORY_FILES), 'notes.md', 'entries.json']) {
         try {
           const st = fs.statSync(path.join(dir, name));
           if (st.isFile()) files.push({ name, bytes: st.size, modifiedAt: Math.floor(st.mtimeMs) });
@@ -1831,7 +1831,8 @@ export function createLocalBackend(handlers = {}, opts = {}) {
       let digest = null;
       try { digest = keyFreeDigest(memory.digest(c, { identity: settings.identity })); } catch (e) { log('byok-memory-error', { error: short(e) }); }
       return { ok: true, char: c, key: charKey(c), dir, digest, text: digestText(digest),
-        generatedText: digestText(digest ? { ...digest, notes: [] } : null), notesText: memory.readNotes(c), files };
+        generatedText: digestText(digest ? { ...digest, notes: [] } : null), notesText: memory.readNotes(c),
+        entries: memory.readEntries(c), files };
     },
     /** Player-authored continuity, distinct from facts written by the addon. */
     saveMemoryNotes(char, text) {
@@ -1840,6 +1841,14 @@ export function createLocalBackend(handlers = {}, opts = {}) {
       memory.saveNotes(c, text);
       if (memory.readNotes(c) !== text) return { ok: false, error: 'failed' };
       return { ok: true };
+    },
+    /** Append a player memory as a durable entry, independent of the notes editor. */
+    addMemoryEntry(char, text) {
+      const c = charArg(char);
+      if (!c || typeof text !== 'string' || !text.trim() || text.length > 500) return { ok: false, error: 'bad_input' };
+      const entry = memory.addEntry(c, text);
+      if (!memory.readEntries(c).some(e => e.id === entry.id && e.text === text)) return { ok: false, error: 'failed' };
+      return { ok: true, entry };
     },
     /** Create a local character before WoW reports it; never overwrite an existing memory. */
     createMemoryCharacter(char) {

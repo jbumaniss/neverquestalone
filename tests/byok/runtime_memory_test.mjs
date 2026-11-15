@@ -45,6 +45,26 @@ test('memory: manually created character is durable, isolated, and never overwri
   assert.match(createMemory(dataDir).digest(char).notes.join(' '), /Prefer stealth/);
 });
 
+test('memory: added entries are distinct from notes, atomic, and survive loading a new memory instance', () => {
+  const dataDir = newData();
+  const mem = createMemory(dataDir);
+  mem.create(CHAR);
+  mem.saveNotes(CHAR, 'Testing persistence');
+  const saved = mem.addEntry(CHAR, 'Remember my Rogue build');
+  assert.equal(saved.text, 'Remember my Rogue build');
+  assert.deepEqual(createMemory(dataDir).readEntries(CHAR), [saved]);
+  assert.equal(mem.readNotes(CHAR), 'Testing persistence');
+  assert.ok(digest(CHAR, { dataDir }).notes.includes('Remember my Rogue build'));
+  const file = path.join(memoryDir(dataDir, CHAR), 'entries.json');
+  const disk = fs.readFileSync(file, 'utf8');
+  assert.throws(() => mem.addEntry(CHAR, 'bad\nentry'), /invalid memory entry/);
+  assert.throws(() => mem.addEntry(CHAR, ''), /invalid memory entry/);
+  assert.equal(fs.readFileSync(file, 'utf8'), disk, 'bad input does not replace the stored entries');
+  fs.writeFileSync(file, '{invalid');
+  assert.throws(() => mem.addEntry(CHAR, 'New memory'), SyntaxError, 'corruption is not silently overwritten');
+  assert.equal(fs.readFileSync(file, 'utf8'), '{invalid');
+});
+
 test('memory: personal notes survive reloads and logbook updates without changing generated facts', () => {
   const dataDir = newData();
   const mem = createMemory(dataDir);

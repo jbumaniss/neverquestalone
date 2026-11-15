@@ -18,7 +18,6 @@ local C = {}
 ns.Chats = C
 local R = ns.R
 
-local LINK_LINES_MAX = 30 -- tooltip lines kept per link (upstream)
 local AGENT_FALLBACK = { main = "NeverQuestAlone" }
 
 ---------------------------------------------------------------------------
@@ -807,102 +806,7 @@ local function NotInState(ctx, prof)
 	return table.concat(keep, "\n")
 end
 
--- Tooltip text without its colour codes, links, textures and atlases: the agent reads
--- plain words, and the bubble doesn't show raw codes. [code health AD-14] By the key
--- check's StripEscapes (below), the one stripper; called when a link is sent, after it loads.
-local function PlainTip(s)
-	return C.StripEscapes(s)
-end
-
--- A link's tooltip, one line per row: the game's own tooltip data
--- (C_TooltipInfo.GetHyperlink), before any frame or addon post-call touches
--- it. Never a rendered tooltip frame: another addon's post-call adds its lines
--- to every one (a bag tracker's naming an alt went out with a linked item,
--- CV-03). A client without that data: no lines, only what the link is.
-local function TooltipLines(payload)
-	local lines = {}
-	local get = type(C_TooltipInfo) == "table" and C_TooltipInfo.GetHyperlink
-	local ok, data = false, nil
-	if type(get) == "function" then ok, data = pcall(get, payload) end
-	if not ok or type(data) ~= "table" or type(data.lines) ~= "table" then return lines end
-	for i = 1, math.min(#data.lines, LINK_LINES_MAX) do
-		local line = data.lines[i]
-		if type(line) == "table" then
-			-- Older clients keep the words in args until TooltipUtil surfaces them.
-			if line.leftText == nil and line.args and TooltipUtil and TooltipUtil.SurfaceArgs then pcall(TooltipUtil.SurfaceArgs, line) end
-			local l = ns.Trim(PlainTip(type(line.leftText) == "string" and line.leftText or ""))
-			local r = ns.Trim(PlainTip(type(line.rightText) == "string" and line.rightText or ""))
-			if r ~= "" then l = l .. "  " .. r end
-			if l ~= "" then table.insert(lines, l) end
-		end
-	end
-	return lines
-end
-
--- What a link is, in words: "item 2140 (Uncommon)", "spell 1978", "quest 176".
-local function DescribeLink(payload)
-	local kind, id = payload:match("^(%a+):(%d+)")
-	if not kind then return payload:match("^(%a+)") or "link" end
-	local s = kind .. " " .. id
-	if kind == "item" then
-		local _, _, quality = Try((C_Item and C_Item.GetItemInfo) or GetItemInfo, payload)
-		local desc = type(quality) == "number" and _G["ITEM_QUALITY" .. quality .. "_DESC"]
-		if desc then s = s .. " (" .. desc .. ")" end
-	end
-	return s
-end
-
--- Where an item goes: inventory slots by itemEquipLoc (companion F5). Rings,
--- trinkets and one-hand weapons have two candidates.
-local EQUIP_SLOTS = {
-	INVTYPE_HEAD = { 1 }, INVTYPE_NECK = { 2 }, INVTYPE_SHOULDER = { 3 }, INVTYPE_BODY = { 4 },
-	INVTYPE_CHEST = { 5 }, INVTYPE_ROBE = { 5 }, INVTYPE_WAIST = { 6 }, INVTYPE_LEGS = { 7 },
-	INVTYPE_FEET = { 8 }, INVTYPE_WRIST = { 9 }, INVTYPE_HAND = { 10 }, INVTYPE_FINGER = { 11, 12 },
-	INVTYPE_TRINKET = { 13, 14 }, INVTYPE_CLOAK = { 15 }, INVTYPE_WEAPON = { 16, 17 },
-	INVTYPE_2HWEAPON = { 16, 17 }, -- a two-hander replaces the off hand too
-	INVTYPE_WEAPONMAINHAND = { 16 }, INVTYPE_WEAPONOFFHAND = { 17 },
-	INVTYPE_SHIELD = { 17 }, INVTYPE_HOLDABLE = { 17 }, INVTYPE_RANGED = { 18 }, INVTYPE_RANGEDRIGHT = { 18 },
-	INVTYPE_THROWN = { 18 }, INVTYPE_RELIC = { 18 }, INVTYPE_TABARD = { 19 },
-}
-local SLOT_NAMES = { "head", "neck", "shoulder", "shirt", "chest", "waist", "legs", "feet", "wrist", "hands",
-	"finger 1", "finger 2", "trinket 1", "trinket 2", "back", "main hand", "off hand", "ranged", "tabard" }
-local EQUIPPED_TIP_MAX = 600 -- bytes of an equipped item's tooltip (F5)
-C.EQUIP_SLOTS = EQUIP_SLOTS
-
--- What's worn where a linked item would go, for "is this an upgrade?" (F5).
--- level 0: name, id, item level and tooltip; 1: no tooltip; 2: id and item level only.
-local function EquippedBlocks(payload, level)
-	if not payload:match("^item:%d+") then return {} end
-	local getInstant = C_Item and C_Item.GetItemInfoInstant
-	local _, _, _, equipLoc = Try(getInstant, payload)
-	local slots = type(equipLoc) == "string" and EQUIP_SLOTS[equipLoc]
-	if not slots then return {} end
-	local out = {}
-	for _, slot in ipairs(slots) do
-		local link = Try(GetInventoryItemLink, "player", slot)
-		local id = Try(GetInventoryItemID, "player", slot)
-		if type(link) == "string" or type(id) == "number" then
-			local name = type(link) == "string" and link:match("|h%[([^%]]*)%]|h") or nil
-			id = id or (type(link) == "string" and tonumber(link:match("item:(%d+)")))
-			local ilvl = ns.Companion and ns.Companion.Call("ItemLevel", slot, link)
-			local parts = {}
-			if level < 2 and name then parts[#parts + 1] = name end
-			if id then parts[#parts + 1] = "item " .. ns.Int(id) end
-			if ilvl then parts[#parts + 1] = "item level " .. ns.Int(ilvl) end
-			local block = "[Equipped: " .. SLOT_NAMES[slot] .. "] " .. table.concat(parts, ", ")
-			if level == 0 and type(link) == "string" then
-				local lp = link:match("|H(item:[^|]+)|h")
-				local tip = lp and table.concat(TooltipLines(lp), "\n  ") or ""
-				if tip ~= "" then
-					if #tip > EQUIPPED_TIP_MAX then tip = ns.Utf8Cut(tip, EQUIPPED_TIP_MAX) .. "..." end
-					block = block .. "\n  " .. tip
-				end
-			end
-			out[#out + 1] = block
-		end
-	end
-	return out
-end
+C.EQUIP_SLOTS = ns.ItemContext.EQUIP_SLOTS
 
 -- Turn the links in a message into text the agent can use: each becomes [Name]
 -- in place, and a block at the end lists what the tooltip says about it, and,
@@ -910,7 +814,7 @@ end
 -- equipped part to fit (see EquippedBlocks). Returns the new text and the
 -- number of links found.
 function C.ExpandLinks(text, level)
-	return ns.LinkContext.Expand(text, level or 0, DescribeLink, TooltipLines, EquippedBlocks)
+	return ns.LinkContext.Expand(text, level or 0, ns.ItemContext.Describe, ns.ItemContext.TooltipLines, ns.ItemContext.Equipped)
 end
 
 

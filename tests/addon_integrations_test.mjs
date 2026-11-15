@@ -57,6 +57,13 @@ test('link expansion preserves linked names, de-duplicates tooltips, and leaves 
   assert.equal(vm.num('plainCount'), 0);
 });
 
+test('item context owns equipment slots while Chats retains its public compatibility API', () => {
+  const vm = newVM();
+  assert.equal(vm.bool('NS.Chats.EQUIP_SLOTS == NS.ItemContext.EQUIP_SLOTS'), true);
+  assert.equal(vm.num('#NS.ItemContext.Equipped("spell:123", 0)'), 0);
+  assert.equal(vm.evaluate('NS.ItemContext.Describe("quest:176")'), 'quest 176');
+});
+
 test('dungeon context is read only and degrades gracefully outside an instance', () => {
   const vm = newVM();
   vm.run(`IsInInstance = function() return true, "party" end

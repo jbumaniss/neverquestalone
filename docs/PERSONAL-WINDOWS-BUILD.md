@@ -1,6 +1,7 @@
 # Build the personal NeverQuestAlone Windows app locally
 
-This personal build uses `feature/modular-game-context` (version 1.4.20). It is not an upstream release.
+This personal build uses the **`main` branch of `jbumaniss/neverquestalone`**
+(version 1.4.20, integration commit `7bf11e5`). It is not an upstream release.
 Its packaged application **checks for upstream release notices only**. It never downloads or installs
 upstream binaries. A release notice is not approval to run someone else's build.
 
@@ -16,24 +17,40 @@ upstream binaries. A release notice is not approval to run someone else's build.
 ```powershell
 git clone https://github.com/jbumaniss/neverquestalone.git
 cd neverquestalone
-git switch feature/modular-game-context
+git switch main
 node --version
 zig version
-npm ci
-npm --prefix app/desktop ci
-npm test
+npm.cmd ci
+npm.cmd --prefix app/desktop ci
+npm.cmd test
 
-# Builds the native capture executable (and checks reproducibility).
+# Required before packaging: builds the native capture executable and checks reproducibility.
 & "$env:ProgramFiles\Git\bin\bash.exe" bridge/capture/windows/build.sh
 
-cd app/desktop
-node scripts/dist.mjs --win --x64
+npm.cmd --prefix app/desktop run dist -- --win --x64
 ```
 
 The installer is produced under `app/desktop/dist/`. A local build without signing
 credentials is **unsigned**, so Windows SmartScreen may warn about it. The build script
 sets `--publish never` unless explicitly overridden. Do not configure publishing or signing
 secrets just to test a local build.
+
+The packaging step is deliberately blocked if `bridge/capture/windows/build/nqa-capture.exe`
+is missing; a desktop app without the helper cannot read the game's screen. Building the
+Electron app is not evidence that capture or speech works in a live WoW session.
+
+## Verification checkpoint (2026-11-15)
+
+- Fork `main` commit `7bf11e5d185c92098834a48f1d3c9516b9574e21` is on GitHub.
+- Windows `npm.cmd test` on `fork-main-test` at that exact commit: **2,144 tests,
+  2,026 passed, 118 skipped, 0 failed**; codec round-trip PASS.
+- The earlier 1.4.19 Windows run is a separate baseline, not evidence for 1.4.20.
+- **Not yet verified:** the 1.4.20 native helper build, packaged installer, installed
+  Electron self-test, in-game addon, ChatGPT login, voice output, Questie and
+  Auctionator live checks. Record these only after observing the Windows results.
+- Dependency installation reported **7 moderate npm audit findings** in `app/desktop`.
+  Review the advisory paths before changing pinned dependencies; do not run
+  `npm audit fix --force` as an unreviewed build step.
 
 Run the installer only after reviewing the test result and generated artifacts.
 Use the app's own addon installation flow with WoW closed. Keep the old working build
@@ -55,8 +72,8 @@ enforces notification-only operation independently of saved preferences.
 
 ## Personal fork upgrade: implementation-first handoff
 
-The installed 1.4.19 app predates the newer feature-branch changes. Keep it installed
-and usable while reviewing the branch. A new installer is required before the new
+The installed 1.4.19 app predates the integrated 1.4.20 changes. Keep it installed
+and usable while reviewing the fork. A new installer is required before the new
 Character memories and Voice conversation settings appear; editing source code alone
 does not modify the running app. Never install an unsigned personal build on someone
 else's PC or treat its hash as a publisher signature.
@@ -92,4 +109,4 @@ Manual Windows/WoW acceptance, only after the new build is installed. A micropho
    recolor the transport while capture is in use.
 
 Implementation and verification statuses are recorded separately in the private
-project reports. No QA result is implied by the existence of a feature-branch commit.
+project reports. Passing source tests does not imply Windows installation or in-game QA.

@@ -544,6 +544,7 @@ export function createMockApi({ now = Date.now, platform = process.platform, del
       if (!s.memoryChars.includes(char)) return { ok: false, error: 'not_found' };
       return {
         char, updated: now() - 2 * 3600e3, notesText: s.memoryNotes?.[char] ?? '',
+        autoText: 'Level 6 Tauren Warrior. Working through Mulgore.',
         digest: 'Level 6 Tauren Warrior. Prefers short answers. Working through Mulgore; skipped the Venture Co. chain.',
         notes: [
           { at: now() - 2 * 3600e3, text: 'Finished "The Hunt Begins".' },
@@ -555,6 +556,12 @@ export function createMockApi({ now = Date.now, platform = process.platform, del
       if (!s.memoryChars.includes(char) || typeof text !== 'string' || text.length > 4000) return { ok: false, error: 'bad_input' };
       (s.memoryNotes || (s.memoryNotes = {}))[char] = text;
       return { ok: true };
+    },
+    async createMemoryCharacter({ char }) {
+      if (typeof char !== 'string' || !char.trim()) return { ok: false, error: 'bad_input' };
+      const created = !s.memoryChars.includes(char);
+      if (created) s.memoryChars.push(char);
+      return { ok: true, created, char };
     },
     async voiceSend({ text }) { return typeof text === 'string' && text.trim() ? { ok: true, chatId: 'main' } : { ok: false, error: 'bad_input' }; },
     async voiceReplies() { return { ok: true, replies: [] }; },

@@ -64,7 +64,7 @@ import { IDENTITY } from './identity.mjs';
 export const API_METHODS = Object.freeze([
   'status', 'providers', 'setKey', 'testKey', 'testStagedKey', 'deleteKey', 'connectCustom', 'choose', 'chooseChatGPT', 'chatgptChanged',
   'caps', 'setCaps', 'privacy', 'setPrivacy', 'usage', 'connections', 'lastRequest',
-  'memory', 'saveMemoryNotes', 'forgetMemory', 'voiceSend', 'voiceReplies', 'transcripts', 'findWow', 'useWowFolder', 'installAddon', 'wowRunning', 'addonPermissions', 'tightenAddonPermissions', 'diagnostics',
+  'memory', 'saveMemoryNotes', 'createMemoryCharacter', 'forgetMemory', 'voiceSend', 'voiceReplies', 'transcripts', 'findWow', 'useWowFolder', 'installAddon', 'wowRunning', 'addonPermissions', 'tightenAddonPermissions', 'diagnostics',
   'setPaused', 'resumeSending', 'uninstall', 'setRetention', 'retentionPreview', 'regenerateSafetyId',
   // Setup (onboarding spec §9.3): terms, connect, the saved key, the install (now or when WoW
   // closes), the launcher, Screen Recording.

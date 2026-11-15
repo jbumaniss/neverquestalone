@@ -589,6 +589,20 @@ h1 + .group, .lead + .group { margin-top: 24px; }
 .group-pad { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 .group-pad > .group-title { padding: 0; }
 .group-pad h3 { font-size: 14px; margin-top: 6px; }
+
+/* Character memories use the same groups, fields and buttons as Settings, with room to edit notes. */
+.page-memory-notes .group { margin-top: 18px; }
+.page-memory-notes .group > .group-rows { padding: 18px; gap: 14px; }
+.page-memory-notes .field { gap: 8px; }
+.page-memory-notes .select { width: 100%; }
+.page-memory-notes .memory-notes-editor { display: block; width: 100%; height: auto; min-height: 160px; padding: 12px; line-height: 1.5; resize: vertical; }
+.memory-create-form { display: flex; flex-direction: column; gap: 14px; padding-top: 14px; border-top: 1px solid var(--hair); }
+.memory-create-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.memory-add-row, .memory-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.memory-add-row .input { flex: 1 1 220px; }
+.memory-add-row .btn, .memory-actions .btn { flex: 0 0 auto; }
+.memory-auto-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
+@media (max-width: 540px) { .memory-create-fields { grid-template-columns: minmax(0, 1fr); } }
 .set {
   display: grid; grid-template-columns: 136px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 11px 16px; min-height: 50px;
   border-top: 1px solid var(--hair); text-align: left;

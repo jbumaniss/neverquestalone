@@ -1,7 +1,9 @@
 # Build the personal NeverQuestAlone Windows app locally
 
-This personal build uses the **`main` branch of `jbumaniss/neverquestalone`**
-(version 1.4.20, integration commit `7bf11e5`). It is not an upstream release.
+This personal build uses **`main` in the `jbumaniss/neverquestalone` fork**.
+The earlier 1.4.20 integration began at `7bf11e5`; the 1.4.21 changes fix
+character memory restore and add manual creation and entry controls.
+It is not an upstream release.
 Its packaged application **checks for upstream release notices only**. It never downloads or installs
 upstream binaries. A release notice is not approval to run someone else's build.
 
@@ -39,15 +41,24 @@ The packaging step is deliberately blocked if `bridge/capture/windows/build/nqa-
 is missing; a desktop app without the helper cannot read the game's screen. Building the
 Electron app is not evidence that capture or speech works in a live WoW session.
 
-## Verification checkpoint (2026-11-15)
+## Verification checkpoints (2026-11-15)
 
 - Fork `main` commit `7bf11e5d185c92098834a48f1d3c9516b9574e21` is on GitHub.
 - Windows `npm.cmd test` on `fork-main-test` at that exact commit: **2,144 tests,
   2,026 passed, 118 skipped, 0 failed**; codec round-trip PASS.
 - The earlier 1.4.19 Windows run is a separate baseline, not evidence for 1.4.20.
-- **Not yet verified:** the 1.4.20 native helper build, packaged installer, installed
-  Electron self-test, in-game addon, ChatGPT login, voice output, Questie and
-  Auctionator live checks. Record these only after observing the Windows results.
+- The Windows 1.4.20 packaged Electron self-test passed after the script-count fix:
+  `ok: true`, `failed: []`, real API, capture helper present. Its corrected
+  unsigned installer had SHA-256 `A86EED2B7CAF531F19D3CA00FB175F08FBE4B712A061DE270AC4A4FCE1217B33`.
+- Windows 1.4.20 displayed Character memories, but saved notes were blank after
+  relaunch. A read-only PowerShell check confirmed that
+  `memory/Malderx-CAMWOW EU5 Realm 3 PvE/notes.md` still existed (19 bytes).
+  The cause was the renderer calling `memory("Name-Realm")` while the IPC contract
+  requires `memory({ char: "Name-Realm" })`. Version 1.4.21 fixes the call and
+  adds regression coverage for loading saved notes.
+- **Not yet verified:** a packaged 1.4.21 Windows self-test, its installer, or
+  an installed 1.4.21 restart check; live ChatGPT, voice, Questie and Auctionator
+  checks also remain open. Record results only after observing them.
 - Dependency installation reported **7 moderate npm audit findings** in `app/desktop`.
   Review the advisory paths before changing pinned dependencies; do not run
   `npm audit fix --force` as an unreviewed build step.
@@ -70,13 +81,13 @@ Before the new installer, set existing NeverQuestAlone builds to manual updates/
 because the previous released application can still update itself. The new fork build
 enforces notification-only operation independently of saved preferences.
 
-## Personal fork upgrade: implementation-first handoff
+## Personal fork update: 1.4.21
 
-The installed 1.4.19 app predates the integrated 1.4.20 changes. Keep it installed
-and usable while reviewing the fork. A new installer is required before the new
-Character memories and Voice conversation settings appear; editing source code alone
-does not modify the running app. Never install an unsigned personal build on someone
-else's PC or treat its hash as a publisher signature.
+The installed 1.4.20 app has the earlier Character memories page, including the
+restore bug. Build and install 1.4.21 to use the corrected page, manual character
+creation and manual Add memory action. Code changes do not update a running app.
+Never install an unsigned personal build on someone else's PC or treat its hash
+as a publisher signature. Existing saved notes must remain intact through the update.
 
 After the full implementation is complete, run the build and test commands above.
 Do not run the installer until the build and helper checks succeed. Save a SHA-256
@@ -87,8 +98,11 @@ installation; having Questie or Auctionator installed separately is optional.
 Manual Windows/WoW acceptance, only after the new build is installed. A microphone is **not required**: use typed questions and the **Test speaker** button. The in-game addon can read replies aloud on Windows when speech output is enabled; speech input remains optional.
 
 1. Sign in with the existing ChatGPT account, send one message and receive one reply.
-2. Save character-specific notes; quit/relaunch and check the same character's notes
-   are still there. Switch characters to check separation.
+2. On Character memories, verify existing Malderx notes appear without re-entering
+   them. Add a memory and Save notes, quit/relaunch, then check the same text is
+   present. Create a second character manually, add a different memory, and verify
+   separation. Play a character and confirm automatic game history fills its
+   separate section. Inputs, buttons and text area must remain spaced and usable.
 3. Under Settings, enable Voice conversation only when wanted. Use **Test speaker**, then
    send typed text and verify a reply can be heard through Windows speakers. Ask in game
    and confirm the desktop reads the reply aloud. Microphone, speech recognition and

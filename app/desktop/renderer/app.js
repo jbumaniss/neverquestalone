@@ -3638,36 +3638,106 @@
     return B.memory().then(function (result) {
       var chars = Array.isArray(result && result.chars) ? result.chars : [];
       var selected = S.memoryNotesCharacter && chars.indexOf(S.memoryNotesCharacter) >= 0 ? S.memoryNotesCharacter : chars[0];
-      if (!selected) return pageNode('page-memory-notes', subTop(), [title('Character memories'), para('Play a character once to start a local memory. Your own notes stay on this computer.', 'set-sub')]);
-      S.memoryNotesCharacter = selected;
-      return B.memory(selected).then(function (m) {
+      if (selected) S.memoryNotesCharacter = selected;
+      var createToggle = quiet(S.memoryCreating ? 'Cancel' : 'Create character', function () {
+        S.memoryCreating = !S.memoryCreating;
+        rerender(false, function () { if (S.memoryCreating) focusEl(document.getElementById('memory-create-name')); });
+      }, { fk: 'toggle-create-character' });
+      var createForm = S.memoryCreating ? h('div', { class: 'memory-create-form' },
+        h('div', { class: 'memory-create-fields' },
+          h('div', { class: 'field' }, h('label', { for: 'memory-create-name', text: 'Character name' }),
+            h('input', { id: 'memory-create-name', class: 'input', maxlength: 48, value: S.memoryCreateName || '', onInput: function (e) { S.memoryCreateName = e.target.value; } })),
+          h('div', { class: 'field' }, h('label', { for: 'memory-create-realm', text: 'Realm' }),
+            h('input', { id: 'memory-create-realm', class: 'input', maxlength: 48, value: S.memoryCreateRealm || '', onInput: function (e) { S.memoryCreateRealm = e.target.value; } }))),
+        busyBtn('Create', function () {
+          var name = String(S.memoryCreateName || '').trim();
+          var realm = String(S.memoryCreateRealm || '').trim();
+          var key = name + '-' + realm;
+          if (!name || !realm || key.length > 64 || chars.indexOf(key) >= 0) {
+            S.settingsResult.memoryCreate = stamp({ ok: false, error: 'bad_input' });
+            rerender(false);
+            return;
+          }
+          return B.createMemoryCharacter({ char: key }).then(function (r) {
+            S.settingsResult.memoryCreate = stamp(r || { ok: false });
+            if (!isErr(r)) {
+              S.memoryNotesCharacter = r.char || key;
+              S.memoryCreateName = '';
+              S.memoryCreateRealm = '';
+              S.memoryCreating = false;
+            }
+            rerender(false);
+          });
+        }, 'btn btn-primary', { fk: 'create-memory-character' }),
+        settingsLine('memoryCreate', 'Character created')) : null;
+      var characterRows = [
+        selected ? h('div', { class: 'field' }, h('label', { for: 'memory-character', text: 'Character' }),
+          h('select', { class: 'select', id: 'memory-character', 'aria-label': 'Character', onChange: function (e) {
+            S.memoryNotesCharacter = e.target.value;
+            rerender(false);
+          } }, chars.map(function (c) { return h('option', { value: c, selected: c === selected, text: c }); })))
+          : para('No character yet. Create one here, or play a character to record it automatically.', 'set-sub'),
+        h('div', { class: 'memory-actions' }, createToggle),
+        createForm,
+      ];
+      var top = [
+        title('Character memories'),
+        para('Your game history is recorded automatically. Add your own memories and keep them between sessions.', 'set-sub'),
+        group('Characters', characterRows, 'memory-characters'),
+      ];
+      if (!selected) return pageNode('page-memory-notes', subTop(), top);
+      return B.memory({ char: selected }).then(function (m) {
         var saved = m && typeof m.notesText === 'string' ? m.notesText : '';
         if (!S.memoryNotesDrafts) S.memoryNotesDrafts = Object.create(null);
+        if (!S.memoryEntryDrafts) S.memoryEntryDrafts = Object.create(null);
         if (!Object.prototype.hasOwnProperty.call(S.memoryNotesDrafts, selected)) S.memoryNotesDrafts[selected] = saved;
-        var picker = h('select', { class: 'select', id: 'memory-character', 'aria-label': 'Character', onChange: function (e) {
-          S.memoryNotesCharacter = e.target.value;
-          rerender(false);
-        } }, chars.map(function (c) { return h('option', { value: c, selected: c === selected, text: c }); }));
-        var editor = h('textarea', { id: 'memory-notes-editor', class: 'input', value: S.memoryNotesDrafts[selected], maxlength: 4000, rows: 7, 'aria-label': 'Character notes', spellcheck: true,
+        var editor = h('textarea', { id: 'memory-notes-editor', class: 'input memory-notes-editor', value: S.memoryNotesDrafts[selected], maxlength: 4000, rows: 7, 'aria-label': 'Character notes', spellcheck: true,
           onInput: function (e) { S.memoryNotesDrafts[selected] = e.target.value; },
         });
-        var saveEdited = function (draft) {
+        var saveEdited = function (draft, added) {
           return B.saveMemoryNotes({ char: selected, text: draft }).then(function (r) {
+            if (isErr(r)) return r;
+            // A successful IPC reply is not enough: check the stored value the page will read on restart.
+            return B.memory({ char: selected }).then(function (check) {
+              return check && check.ok !== false && check.notesText === draft ? r : { ok: false, error: 'failed' };
+            });
+          }).catch(function () { return { ok: false, error: 'failed' }; }).then(function (r) {
             if (!isErr(r)) S.memoryNotesDrafts[selected] = draft;
+            if (!isErr(r) && added) S.memoryEntryDrafts[selected] = '';
             S.settingsResult.memoryNotes = stamp(r || { ok: false });
             rerender(false, function () { focusEl(document.getElementById('memory-notes-editor')); });
+            return r;
           });
         };
-        // A status push patches the visible textarea in place, but replaces button handlers.
-        // The handler's captured editor may then be a detached node with an old value.
+        var entry = h('input', { class: 'input', id: 'memory-add-entry', maxlength: 500, value: S.memoryEntryDrafts[selected] || '',
+          placeholder: 'A goal, preference, reminder or fact', 'aria-label': 'New memory',
+          onInput: function (e) { S.memoryEntryDrafts[selected] = e.target.value; },
+        });
+        var addMemory = busyBtn('Add memory', function () {
+          var line = String(S.memoryEntryDrafts[selected] || '').trim().replace(/\s+/g, ' ');
+          var existing = String(S.memoryNotesDrafts[selected] || '').trimEnd();
+          if (!line || existing.length + line.length + 3 > 4000) {
+            S.settingsResult.memoryNotes = stamp({ ok: false, error: 'bad_input' });
+            rerender(false);
+            return;
+          }
+          return saveEdited(existing + (existing ? '\n' : '') + '- ' + line, true);
+        }, 'btn btn-quiet', { fk: 'add-memory-entry' });
+        // A status push patches the textarea in place, but replaces button handlers; keep the draft in state.
         var save = busyBtn('Save notes', function () { return saveEdited(S.memoryNotesDrafts[selected]); }, 'btn btn-primary', { fk: 'save-memory-notes' });
         var clear = busyBtn('Clear notes', function () { return saveEdited(''); }, 'btn btn-quiet', { fk: 'clear-memory-notes' });
-        return pageNode('page-memory-notes', subTop(), [
-          title('Character memories'),
-          para('Saved locally, used as background in future chats. Do not store passwords or private information.', 'set-sub'),
-          group(null, [picker, editor, save, clear, settingsLine('memoryNotes', 'Notes saved')], 'memory-notes'),
-          m && m.digest ? group('From the game', [para(m.digest, 'set-sub')], 'memory-facts') : null,
-        ]);
+        return pageNode('page-memory-notes', subTop(), top.concat([
+          group('Automatically remembered', [m && m.autoText
+            ? para(m.autoText, 'memory-auto-text')
+            : para('No game facts recorded yet. Play this character to update its history.', 'set-sub')], 'memory-facts'),
+          group('Your memories', [
+            para('Add one memory at a time, or edit the notes below. These stay on this computer.', 'set-sub'),
+            h('div', { class: 'memory-add-row' }, entry, addMemory),
+            h('div', { class: 'field' }, h('label', { for: 'memory-notes-editor', text: 'Saved notes' }), editor),
+            h('div', { class: 'memory-actions' }, save, clear),
+            settingsLine('memoryNotes', 'Saved to disk'),
+          ], 'memory-notes'),
+        ]));
       });
     });
   };

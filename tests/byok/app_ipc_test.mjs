@@ -150,6 +150,9 @@ test('the dispatcher: unknown calls, oversized input and thrown errors', async (
 test('voice and character notes: bounded, explicit IPC contracts', async () => {
   const { ipc } = makeCtx();
   assert.equal((await ipc.call('saveMemoryNotes', { char: 'Thokk-Testrealm', text: 'Prefer brief answers' })).ok, true);
+  assert.equal((await ipc.call('createMemoryCharacter', { char: 'New-Other Realm' })).ok, true);
+  assert.equal((await ipc.call('createMemoryCharacter', { char: '../escape' })).error, 'bad_input');
+  assert.equal((await ipc.call('createMemoryCharacter', { char: 'x'.repeat(65) })).error, 'bad_input');
   assert.equal((await ipc.call('saveMemoryNotes', { char: '../escape', text: 'no' })).error, 'bad_input');
   assert.equal((await ipc.call('saveMemoryNotes', { char: 'Thokk-Testrealm', text: 'x'.repeat(4001) })).error, 'bad_input');
   assert.equal((await ipc.call('voiceSend', { text: 'What is my next quest?' })).ok, true);

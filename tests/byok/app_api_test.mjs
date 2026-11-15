@@ -766,7 +766,7 @@ test('memory: the characters, one\'s digest (never its folder), forget', async (
   fs.writeFileSync(path.join(dir, 'log.md'), '- 2026-09-26 Reached level 6\n');
   assert.deepEqual(await r.api.memory(), { chars: ['Tavi-Testrealm'] });
   const m = await r.api.memory('Tavi-Testrealm');
-  assert.deepEqual(keysOf(m), ['char', 'digest', 'notes', 'notesText', 'updated']);
+  assert.deepEqual(keysOf(m), ['autoText', 'char', 'digest', 'notes', 'notesText', 'updated']);
   assert.equal(m.char, 'Tavi-Testrealm');
   assert.equal(typeof m.digest, 'string');
   assert.ok(!JSON.stringify(m).includes(r.dataDir), 'no folder path');
@@ -775,6 +775,24 @@ test('memory: the characters, one\'s digest (never its folder), forget', async (
   assert.deepEqual(await r.api.forgetMemory('Tavi-Testrealm'), { ok: true });
   assert.equal(fs.existsSync(dir), false);
   assert.equal((await r.api.forgetMemory('')).error, 'bad_input');
+});
+
+test('memory: explicit Save survives creating fresh backend and app API with the same Windows-style character folder', async (t) => {
+  const r = await rig(t);
+  const char = 'Malderx-CAMWOW EU5 Realm 3 PvE';
+  assert.deepEqual(await r.api.createMemoryCharacter({ char }), { ok: true, char, created: true });
+  assert.deepEqual(await r.api.createMemoryCharacter({ char }), { ok: true, char, created: false });
+  assert.deepEqual(await r.api.saveMemoryNotes({ char, text: '- Remember my rogue build.' }), { ok: true });
+  assert.equal((await r.api.memory(char)).notesText, '- Remember my rogue build.');
+  const file = path.join(r.dataDir, 'memory', char, 'notes.md');
+  assert.equal(fs.readFileSync(file, 'utf8'), '- Remember my rogue build.');
+
+  const restartedBackend = createLocalBackend({}, { config: r.config, dataDir: r.dataDir, keystore: r.keystore, checks: { models: false } });
+  const reopened = createAppApi({ backend: restartedBackend, keystore: r.keystore, config: r.config, paths: { userData: r.dataDir } });
+  t.after(async () => { await reopened.stop(); await restartedBackend.stop(); });
+  assert.deepEqual(await reopened.memory(), { chars: [char] });
+  assert.equal((await reopened.memory(char)).notesText, '- Remember my rogue build.');
+  assert.equal((await reopened.memory(char)).digest.includes('Remember my rogue build'), true);
 });
 
 test('findWow, installAddon (the bridge restarts for a new folder), wowRunning; refused while WoW runs', async (t) => {

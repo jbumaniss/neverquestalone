@@ -308,6 +308,44 @@ test('character notes save the visible draft after a background status redraw', 
     { char: 'Thokk-Testrealm', text: 'Testing character memory persistence.' },
   ]);
 });
+
+test('character memories: reopen shows the existing notes, not an empty field from a rejected memory call', async () => {
+  const r = await pageRig({
+    state: { ...READY, memoryNotes: { 'Thokk-Testrealm': 'My saved preference' } },
+    hash: 'memoryNotes',
+  });
+  assert.equal(r.document.getElementById('memory-notes-editor').value, 'My saved preference');
+  assert.ok(r.calls.some(c => c[0] === 'memory' && c[1] === 'Thokk-Testrealm'), 'the character read passed IPC validation');
+});
+
+test('character memories: create a character and add a saved memory from the page', async () => {
+  const r = await pageRig({ state: READY, hash: 'memoryNotes' });
+  await r.press(fk(r, 'toggle-create-character'));
+  const name = r.document.getElementById('memory-create-name');
+  const realm = r.document.getElementById('memory-create-realm');
+  name.value = 'Malderx';
+  name.dispatchEvent(r.event('input'));
+  realm.value = 'CAMWOW EU5 Realm 3 PvE';
+  realm.dispatchEvent(r.event('input'));
+  await r.press(fk(r, 'create-memory-character'));
+  assert.deepEqual(r.calls.filter(c => c[0] === 'createMemoryCharacter').map(c => c[1]), [
+    { char: 'Malderx-CAMWOW EU5 Realm 3 PvE' },
+  ]);
+  assert.equal(r.document.getElementById('memory-character').value, 'Malderx-CAMWOW EU5 Realm 3 PvE');
+
+  const entry = r.document.getElementById('memory-add-entry');
+  entry.value = 'Remember my rogue build';
+  entry.dispatchEvent(r.event('input'));
+  await r.press(fk(r, 'add-memory-entry'));
+  assert.deepEqual(r.calls.filter(c => c[0] === 'saveMemoryNotes').map(c => c[1]), [
+    { char: 'Malderx-CAMWOW EU5 Realm 3 PvE', text: '- Remember my rogue build' },
+  ]);
+  assert.equal((await r.api.memory('Malderx-CAMWOW EU5 Realm 3 PvE')).notesText, '- Remember my rogue build');
+  await r.settle(30);
+  assert.match(r.pageText(), /Saved to disk/);
+  assert.equal(r.document.getElementById('memory-notes-editor').value, '- Remember my rogue build');
+  assert.equal(r.document.getElementById('memory-add-entry').value, '');
+});
 const IN_GAME = { ...READY, wow: { found: true, running: true } };
 const OPENAI = { keys: { openai: { masked: 'sk-proj-…xxxx', state: 'ok' } }, choice: { provider: 'openai', model: 'gpt-6-luna', effort: 'low' }, addonInstalled: true };
 // Other (custom) at a server on this computer: Ollama's OpenAI-compatible address, no key.

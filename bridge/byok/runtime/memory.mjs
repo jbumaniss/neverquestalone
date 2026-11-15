@@ -176,6 +176,23 @@ export function saveNotes(dataDir, char, value) {
   }
 }
 
+/** Register a character before the first game event, without replacing any existing notes or facts. */
+export function createCharacterMemory(dataDir, char) {
+  if (!dataDir || !char?.name) throw new TypeError('invalid character');
+  const dir = memoryDir(dataDir, char);
+  let existing = false;
+  try {
+    const info = fs.lstatSync(dir);
+    if (!info.isDirectory()) throw new TypeError('invalid character folder');
+    existing = true;
+  } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  try {
+    fs.writeFileSync(path.join(dir, NOTES_FILE), '', { flag: 'wx', mode: 0o600 });
+  } catch (e) { if (e.code !== 'EEXIST') throw e; }
+  return { created: !existing };
+}
+
 function prune(d) {
   const out = {};
   for (const [k, v] of Object.entries(d)) if (Array.isArray(v) ? v.length : v) out[k] = v;
@@ -206,6 +223,7 @@ export function createMemory(dataDir, defaults = {}) {
     digest: (char, opts = {}) => digest(char, { dataDir, ...defaults, ...opts }),
     readNotes: char => readNotes(dataDir, char),
     saveNotes: (char, value) => saveNotes(dataDir, char, value),
+    create: char => createCharacterMemory(dataDir, char),
     forget: char => forgetMemory(dataDir, char),
     forgetAll: () => forgetAllMemory(dataDir),
   };

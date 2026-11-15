@@ -1315,6 +1315,7 @@ export function createAppApi(opts = {}) {
       // The window's shape: {char, digest (text), notes: [{at, text}], updated}. Never the folder's path.
       let d = null;
       let text = '';
+      let autoText = '';
       let notesText = '';
       let updated = 0;
       if (typeof be?.memory === 'function') {
@@ -1323,6 +1324,7 @@ export function createAppApi(opts = {}) {
         if (!r || r.ok === false) return { ok: false, error: 'not_found' };
         d = isObj(r.digest) ? r.digest : null;
         text = typeof r.text === 'string' ? r.text : '';
+        autoText = typeof r.generatedText === 'string' ? r.generatedText : '';
         notesText = typeof r.notesText === 'string' ? r.notesText : '';
         updated = Math.max(0, ...(Array.isArray(r.files) ? r.files.map(f => f?.modifiedAt ?? 0) : []));
       } else {
@@ -1331,13 +1333,20 @@ export function createAppApi(opts = {}) {
         try { updated = fs.statSync(path.join(root, char)).mtimeMs; } catch { updated = 0; }
       }
       if (!text && d) text = [...(d.character ?? []), ...(d.recent ?? [])].join('\n');
-      return clean({ char, digest: text, notes: (d?.notes ?? []).map(t => ({ at: updated, text: String(t) })), notesText, updated });
+      if (!autoText && d) autoText = [...(d.character ?? []), ...(d.recent ?? []), ...(d.quests ?? [])].join('\n');
+      return clean({ char, digest: text, autoText, notes: (d?.notes ?? []).map(t => ({ at: updated, text: String(t) })), notesText, updated });
     },
 
     async saveMemoryNotes({ char, text }) {
       if (!isCharName(char) || typeof text !== 'string' || text.length > 4_000) return bad('input');
       if (typeof S.backend?.saveMemoryNotes !== 'function') return bad('unavailable');
       try { return clean(await S.backend.saveMemoryNotes(char, text)); }
+      catch { return { ok: false, error: 'failed' }; }
+    },
+
+    async createMemoryCharacter({ char }) {
+      if (!isCharName(char) || typeof S.backend?.createMemoryCharacter !== 'function') return bad('input');
+      try { return clean(await S.backend.createMemoryCharacter(char)); }
       catch { return { ok: false, error: 'failed' }; }
     },
 

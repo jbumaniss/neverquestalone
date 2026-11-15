@@ -32,6 +32,19 @@ test('memory: nothing yet is null', () => {
   assert.equal(digestTokens(null), 0);
 });
 
+test('memory: manually created character is durable, isolated, and never overwrites existing notes', () => {
+  const dataDir = newData();
+  const char = { name: 'Malderx', realm: 'CAMWOW EU5 Realm 3 PvE' };
+  const first = createMemory(dataDir);
+  assert.deepEqual(first.create(char), { created: true });
+  assert.deepEqual(createMemory(dataDir).create(char), { created: false });
+  first.saveNotes(char, '- Prefer stealth\n- Save gold');
+  assert.deepEqual(createMemory(dataDir).create(char), { created: false });
+  assert.equal(createMemory(dataDir).readNotes(char), '- Prefer stealth\n- Save gold');
+  assert.equal(createMemory(dataDir).readNotes(CHAR), '', 'another character has no notes');
+  assert.match(createMemory(dataDir).digest(char).notes.join(' '), /Prefer stealth/);
+});
+
 test('memory: personal notes survive reloads and logbook updates without changing generated facts', () => {
   const dataDir = newData();
   const mem = createMemory(dataDir);

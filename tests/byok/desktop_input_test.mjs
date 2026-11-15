@@ -10,17 +10,20 @@ test('desktop input uses current chat and existing guarded message handler', () 
     acceptMessage: (...args) => sent.push(args),
     records: () => [{ t: 'reply', seq: 2, chat: 'new', text: 'Hello' }, { t: 'error', seq: 3, text: 'ignore' }],
   });
-  assert.equal(input.send('Go north').chatId, 'new');
+  const sentMessage = input.send('Go north');
+  assert.equal(sentMessage.chatId, 'new');
+  assert.equal(sentMessage.after, 2);
   assert.equal(sent.length, 1);
   assert.equal(sent[0][0].text, 'Go north');
   assert.equal(sent[0][2], 'desktop');
-  assert.deepEqual(input.replies(1), [{ seq: 2, chatId: 'new', text: 'Hello' }]);
-  assert.deepEqual(input.replies(2), []);
+  assert.deepEqual(input.replies(1, 'new'), [{ seq: 2, chatId: 'new', text: 'Hello' }]);
+  assert.deepEqual(input.replies(1, 'old'), []);
+  assert.deepEqual(input.replies(2, 'new'), []);
   assert.equal(input.send('x'.repeat(2901)).error, 'bad_input');
 });
 
 test('desktop input cannot send when no live game chat exists', () => {
   const input = createDesktopInput({ currentToken: () => null, tokenState: () => null, chats: () => [], acceptMessage: () => { throw new Error('sent'); }, records: () => [] });
   assert.equal(input.send('Hello').error, 'no_active_chat');
-  assert.deepEqual(input.replies(), []);
+  assert.deepEqual(input.replies(0, 'none'), []);
 });

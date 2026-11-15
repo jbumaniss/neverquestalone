@@ -155,6 +155,7 @@ test('voice and character notes: bounded, explicit IPC contracts', async () => {
   assert.equal((await ipc.call('voiceSend', { text: 'What is my next quest?' })).ok, true);
   assert.equal((await ipc.call('voiceSend', { text: 'x'.repeat(3000) })).error, 'bad_input');
   assert.equal((await ipc.call('voiceReplies', { after: -1 })).error, 'bad_input');
+  assert.equal((await ipc.call('voiceReplies', { after: 0 })).error, 'bad_input');
   assert.equal((await ipc.call('voiceArm', { enabled: 'yes' })).error, 'bad_input');
   assert.equal((await ipc.call('voiceHotkey', { enabled: 'yes' })).error, 'bad_input');
 });

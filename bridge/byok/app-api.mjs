@@ -1348,9 +1348,9 @@ export function createAppApi(opts = {}) {
       catch { return { ok: false, error: 'failed' }; }
     },
 
-    async voiceReplies({ after = 0 } = {}) {
-      if (!Number.isSafeInteger(after) || after < 0) return bad('input');
-      try { return clean({ ok: true, replies: S.bridge?.voiceReplies?.(after) ?? [] }); }
+    async voiceReplies({ after = 0, chatId } = {}) {
+      if (!Number.isSafeInteger(after) || after < 0 || typeof chatId !== 'string' || !chatId || chatId.length > 64) return bad('input');
+      try { return clean({ ok: true, replies: S.bridge?.voiceReplies?.(after, chatId) ?? [] }); }
       catch { return { ok: false, error: 'failed' }; }
     },
 

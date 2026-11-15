@@ -898,7 +898,7 @@ export const HANDLERS = {
     run: (ctx, v) => ctx.api.voiceSend(v),
   },
   voiceReplies: {
-    input: obj({ after: { type: 'integer', minimum: 0 } }, [], { optional: true }),
+    input: obj({ after: { type: 'integer', minimum: 0 }, chatId: { type: 'string', minLength: 1, maxLength: 64 } }, ['chatId']),
     run: (ctx, v) => ctx.api.voiceReplies(v),
   },
   voiceArm: {

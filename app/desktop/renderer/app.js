@@ -3676,10 +3676,12 @@
     if (!S.voiceTimer) {
       S.voiceTimer = setInterval(function () {
         if (S.page !== 'voice') return;
-        B.voiceReplies({ after: S.voiceSeq || 0 }).then(function (r) {
+        if (!v.chatId) return;
+        var requestedChat = v.chatId;
+        B.voiceReplies({ after: S.voiceSeq || 0, chatId: requestedChat }).then(function (r) {
+          if (requestedChat !== v.chatId) return;
           if (isErr(r) || !Array.isArray(r.replies)) return;
           var replies = r.replies;
-          if (!S.voiceInitialized) { S.voiceInitialized = true; S.voiceSeq = replies.reduce(function (n, a) { return Math.max(n, a.seq || 0); }, S.voiceSeq || 0); return; }
           replies.forEach(function (a) {
             if (a.seq > (S.voiceSeq || 0)) { S.voiceSeq = a.seq; voice?.speak(a.text); }
           });
@@ -3689,7 +3691,11 @@
     var sendText = function (text) {
       B.voiceSend({ text: text }).then(function (r) {
         v.error = isErr(r) ? errText(r, 'Could not send to the game. Keep WoW and the companion running.') : null;
-        v.lastText = text;
+        if (!isErr(r)) {
+          if (v.chatId !== r.chatId) { v.chatId = r.chatId; S.voiceSeq = r.after || 0; }
+          else S.voiceSeq = Math.max(S.voiceSeq || 0, r.after || 0);
+          v.lastText = text;
+        }
         rerender(false);
       });
     };

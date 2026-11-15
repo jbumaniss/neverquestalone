@@ -10,14 +10,15 @@ export function createDesktopInput({ currentToken, tokenState, chats, acceptMess
       const t = token && tokenState(token);
       const chat = token && chats().filter(c => c.token === token).sort((a, b) => (b.seen || 0) - (a.seen || 0))[0];
       if (!t || !chat) return { ok: false, error: 'no_active_chat' };
+      const after = records(token).reduce((last, r) => r.t === 'reply' ? Math.max(last, r.seq || 0) : last, 0);
       const key = `desktop-${randomUUID()}`;
       acceptMessage({ token, chat: chat.id, key, text, context: null, args: {} }, t, 'desktop');
-      return { ok: true, chatId: chat.id, key };
+      return { ok: true, chatId: chat.id, key, after };
     },
-    replies(after = 0) {
+    replies(after = 0, chatId) {
       const token = currentToken();
-      if (!token || !Number.isSafeInteger(after) || after < 0) return [];
-      return records(token).filter(r => r.t === 'reply' && r.seq > after)
+      if (!token || !Number.isSafeInteger(after) || after < 0 || typeof chatId !== 'string' || !chatId) return [];
+      return records(token).filter(r => r.t === 'reply' && r.seq > after && r.chat === chatId)
         .map(r => ({ seq: r.seq, chatId: r.chat, text: r.summary || r.text || '' }));
     },
   };

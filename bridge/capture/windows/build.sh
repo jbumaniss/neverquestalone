@@ -53,8 +53,16 @@ sha256() {
 # $1: the DLL names the executable imports, one per line.
 check_and_sum() {
   local imports
-  imports="$(echo "$1" | tr 'A-Z' 'a-z' | sort -u)"
+  imports="$(echo "$1" | tr 'A-Z' 'a-z' | sed '/^$/d' | sort -u)"
+  if [ -z "$imports" ]; then
+    echo "refusing: could not verify the helper's imported DLLs" >&2
+    return 3
+  fi
   echo "imports: $(echo "$imports" | tr '\n' ' ')"
+  if ! echo "$imports" | grep -Fxq 'd3d11.dll' || ! echo "$imports" | grep -Fxq 'dxgi.dll'; then
+    echo "refusing: expected Windows graphics DLL imports were not found" >&2
+    return 3
+  fi
   if echo "$imports" | grep -Eq "^($NET_DLLS)\.dll$"; then
     echo "refusing: the helper must not import networking DLLs" >&2
     rm -f "$OUT/nqa-capture.exe"
@@ -126,7 +134,9 @@ compile_zig() {
     rm -rf "$again"
     echo "reproducible: a second build in another folder, from its own empty zig cache, is identical"
   fi
-  check_and_sum "$(strings -a "$OUT/nqa-capture.exe" | grep -iE '^[a-z0-9_.-]+\.dll$')"
+  # Git Bash on Windows does not necessarily include binutils' strings.
+  # Imported DLL names are ASCII in the PE image; grep -a extracts them without extra tools.
+  check_and_sum "$(grep -aoEi '[a-z0-9_.-]+\.dll' "$OUT/nqa-capture.exe" || true)"
 }
 
 case "${1:-}" in

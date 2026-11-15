@@ -21,6 +21,7 @@
     "start": "npm --prefix app/desktop start",
     "package:addon": "node tools/package-addon.mjs",
     "test": "node tests/order_check.js addon/NeverQuestAlone && node tools/run-tests.mjs && node tests/codec_test.js",
+    "test:native": "node --test tests/byok/capture_windows_decoder_test.mjs",
     "test:e2e": "node --test --test-concurrency=1 tests/byok/bridge_byok_e2e_test.mjs",
     "probe": "python3 bridge/capture_x11.py --probe bridge/probe.png",
     "capture:build": "node bridge/capture/build.mjs"

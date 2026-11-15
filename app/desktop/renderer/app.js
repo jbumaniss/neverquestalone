@@ -3642,13 +3642,19 @@
       S.memoryNotesCharacter = selected;
       return B.memory(selected).then(function (m) {
         var saved = m && typeof m.notesText === 'string' ? m.notesText : '';
+        if (!S.memoryNotesDrafts) S.memoryNotesDrafts = Object.create(null);
+        if (!Object.prototype.hasOwnProperty.call(S.memoryNotesDrafts, selected)) S.memoryNotesDrafts[selected] = saved;
         var picker = h('select', { class: 'select', id: 'memory-character', 'aria-label': 'Character', onChange: function (e) {
           S.memoryNotesCharacter = e.target.value;
           rerender(false);
         } }, chars.map(function (c) { return h('option', { value: c, selected: c === selected, text: c }); }));
-        var editor = h('textarea', { id: 'memory-notes-editor', class: 'input', value: saved, maxlength: 4000, rows: 7, 'aria-label': 'Character notes', spellcheck: true });
+        var editor = h('textarea', { id: 'memory-notes-editor', class: 'input', value: S.memoryNotesDrafts[selected], maxlength: 4000, rows: 7, 'aria-label': 'Character notes', spellcheck: true,
+          onInput: function (e) { S.memoryNotesDrafts[selected] = e.target.value; },
+        });
         var save = busyBtn('Save notes', function () {
-          return B.saveMemoryNotes({ char: selected, text: editor.value }).then(function (r) {
+          var draft = editor.value;
+          return B.saveMemoryNotes({ char: selected, text: draft }).then(function (r) {
+            if (!isErr(r) && S.memoryNotesDrafts[selected] === draft) delete S.memoryNotesDrafts[selected];
             S.settingsResult.memoryNotes = stamp(r || { ok: false });
             rerender(false, function () { focusEl(document.getElementById('memory-notes-editor')); });
           });

@@ -1086,7 +1086,10 @@ async function selfTest() {
       }
       out.liveRegion = out.liveRegion && document.getElementById('live') === live;
       // The page's own images are the in-game frame and the route map (index.html's hidden figures and their clones); nothing else.
-      out.injectedElements = [...document.querySelectorAll('img, iframe, object, embed, webview')].filter(e => !(e.tagName === 'IMG' && e.closest('figure.ingame') && (['ask', 'thinking', 'reply'].some(n => e.src === 'nqa://app/img/ingame-' + n + '@1x.webp') || e.src === 'nqa://app/img/route-map.svg'))).length + document.scripts.length - 3 + (out.hostileElements ?? 1); // strings.js, format.js, app.js; and none on the last request's page
+      const trustedScripts = ['strings.js', 'format.js', 'voice.js', 'app.js'];
+      const scripts = [...document.scripts].map(s => s.getAttribute('src'));
+      const untrustedScripts = scripts.length !== trustedScripts.length || scripts.some((src, i) => src !== trustedScripts[i]);
+      out.injectedElements = [...document.querySelectorAll('img, iframe, object, embed, webview')].filter(e => !(e.tagName === 'IMG' && e.closest('figure.ingame') && (['ask', 'thinking', 'reply'].some(n => e.src === 'nqa://app/img/ingame-' + n + '@1x.webp') || e.src === 'nqa://app/img/route-map.svg'))).length + Number(untrustedScripts) + (out.hostileElements ?? 1); // only the four ordered local scripts; and none on the last request's page
       return out;
     })()`, true);
     await settled();

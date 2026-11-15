@@ -21,17 +21,33 @@ local function collect(lines, Try)
 				for slot = 1, math.min(n or 0, 40) do
 					local info = Try(itemInfo, bag, slot)
 					local id = type(info) == "table" and F.Number(Try, function() return info.itemID end) or F.Number(Try, idInfo, bag, slot)
-					if id and id > 0 then found[id] = (found[id] or 0) + 1 end
+					if id and id > 0 then
+						local count = type(info) == "table" and F.Number(Try, function() return info.stackCount end) or select(2, Try(itemInfo, bag, slot))
+						found[id] = (found[id] or 0) + (type(count) == "number" and count > 0 and count or 1)
+					end
 				end
 			end
-			local unique = 0
-			for _ in pairs(found) do unique = unique + 1 end
-			if unique > 0 then parts[#parts + 1] = unique .. " bank item types" end
+			local ids = {}
+			for id in pairs(found) do ids[#ids + 1] = id end
+			table.sort(ids)
+			if #ids > 0 then parts[#parts + 1] = #ids .. " bank item types" end
+			for i = 1, math.min(#ids, 5) do
+				local id = ids[i]
+				local name = F.Text(Try((C_Item and C_Item.GetItemNameByID) or GetItemInfo, id), 20)
+				parts[#parts + 1] = (name or ("#" .. id)) .. " x" .. found[id]
+			end
 		end
 	end
 	if visible(MailFrame) then
 		local count = F.Number(Try, GetInboxNumItems)
 		parts[#parts + 1] = "mailbox open" .. (count and (" (" .. count .. " inbox entries)") or "")
+		if count then
+			for i = 1, math.min(count, 3) do
+				local _, _, _, subject, _, _, _, attachments = Try(GetInboxHeaderInfo, i)
+				subject = F.Text(subject, 28)
+				if subject then parts[#parts + 1] = "mail " .. i .. " " .. subject .. (type(attachments) == "number" and (" (" .. attachments .. " attachments)") or "") end
+			end
+		end
 	end
 	if visible(MerchantFrame) then
 		local count = F.Number(Try, GetMerchantNumItems)

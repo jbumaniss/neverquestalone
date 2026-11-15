@@ -9,13 +9,24 @@ local function collect(lines, Try)
 	if type(mounts) == "table" then
 		local known = 0
 		for _, id in ipairs(mounts) do
-			local _, _, _, _, _, _, _, _, _, _, collected = Try(journal.GetMountInfoByID, id)
-			if collected == true then known = known + 1 end
+			local name, _, _, _, _, _, _, _, _, _, collected = Try(journal.GetMountInfoByID, id)
+			if collected == true then
+				known = known + 1
+				name = F.Text(name, 25)
+				if name and known <= 4 then parts[#parts + 1] = "mount " .. name end
+			end
 		end
 		parts[#parts + 1] = known .. " collected mounts"
 	else
 		local count = F.Number(Try, GetNumCompanions, "MOUNT")
-		if count then parts[#parts + 1] = count .. " mounts in companion list" end
+		if count then
+			parts[#parts + 1] = count .. " mounts in companion list"
+			for i = 1, math.min(count, 4) do
+				local _, name = Try(GetCompanionInfo, "MOUNT", i)
+				name = F.Text(name, 25)
+				if name then parts[#parts + 1] = "mount " .. name end
+			end
+		end
 	end
 	local pets = F.Number(Try, GetNumCompanions, "CRITTER")
 	if pets then parts[#parts + 1] = pets .. " companion pets" end

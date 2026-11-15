@@ -17,7 +17,7 @@ local function group(lines, Try)
 		if exists == true then
 			seen = seen + 1
 			if seen <= 10 then
-				local _, class = Try(UnitClass, unit)
+				local _, class = Try(UnitClass, unit); class = ns.Readable(class)
 				local level = F.Number(Try, UnitLevel, unit)
 				local roleName = F.Text(Try(UnitGroupRolesAssigned, unit), 8)
 				local desc = F.Text(class, 15) or "member"

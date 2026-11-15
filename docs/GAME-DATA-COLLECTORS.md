@@ -34,7 +34,7 @@ Currently implemented question-triggered modules:
 - `GroupCombatContext`: group composition without other players' names, buffs and debuffs.
 - `EquipmentContext`: worn item IDs, names, item levels and optional stats.
 - `MovementContext`: speed, facing and travel state when readable.
-- `ServicesContext`: data from *currently open* bank, mail and merchant interfaces; no remote access.
+- `ServicesContext`: bounded item summaries, mail subjects and merchant prices from *currently open* interfaces; no remote access.
 - `CollectionsContext`: supported mount/pet/achievement counts.
 - `AuctionContext`: a locally indexed Auctionator price for a question naming an item ID.
 

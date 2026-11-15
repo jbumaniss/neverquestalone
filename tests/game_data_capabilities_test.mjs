@@ -85,6 +85,23 @@ test('equipment, movement and open service facts require a relevant question', (
   assert.match(context(vm, 'my bank'), /Open services: bank open \(28 base slots\)/);
 });
 
+test('open bank and mailbox expose bounded item and message details only on request', () => {
+  const vm = newVM();
+  vm.run(`
+    BankFrame = { IsShown = function() return true end }
+    MailFrame = { IsShown = function() return true end }
+    C_Container = {
+      GetContainerNumSlots = function(bag) return bag == -1 and 1 or 0 end,
+      GetContainerItemInfo = function(bag, slot) return bag == -1 and slot == 1 and { itemID = 123, stackCount = 8 } or nil end,
+    }
+    GetInboxNumItems = function() return 1 end
+    GetInboxHeaderInfo = function() return nil, nil, 'Sender', 'Auction won', 0, 0, 12, 2 end
+  `);
+  assert.match(context(vm, 'what is in my bank?'), /1 bank item types, .* x8/);
+  assert.match(context(vm, 'what mail is waiting?'), /mail 1 Auction won \(2 attachments\)/);
+  assert.doesNotMatch(context(vm, 'hello'), /Open services:/);
+});
+
 test('optional collections and auction adapters omit unsupported facts', () => {
   const vm = newVM();
   vm.run(`
@@ -93,6 +110,26 @@ test('optional collections and auction adapters omit unsupported facts', () => {
   `);
   assert.match(context(vm, 'my mounts and achievements'), /Collections: 2 mounts in companion list, 4 companion pets, 7 completed achievements/);
   assert.doesNotMatch(context(vm, 'auction price of item 123'), /Auctionator:/);
+});
+
+test('multi-return WoW APIs keep faction header, mail attachment and mount-collected fields', () => {
+  const vm = newVM();
+  vm.run(`
+    GetNumFactions = function() return 2 end
+    GetFactionInfo = function(i)
+      if i == 1 then return 'Alliance', nil, 5, 0, 3000, 0, nil, nil, true end
+      return 'Stormwind', nil, 5, 0, 3000, 100, nil, nil, false
+    end
+    C_MountJournal = {
+      GetMountIDs = function() return { 101, 102 } end,
+      GetMountInfoByID = function(id)
+        return id == 101 and 'Brown Horse' or 'Black Horse', nil, nil, nil, nil, nil, nil, nil, nil, nil, id == 101
+      end,
+    }
+  `);
+  assert.match(context(vm, 'my reputation'), /Reputation: Stormwind standing 5/);
+  assert.doesNotMatch(context(vm, 'my reputation'), /Alliance standing/);
+  assert.match(context(vm, 'my mount collection'), /1 collected mounts/);
 });
 
 test('a large optional inventory cannot displace the complete quest-id line', () => {

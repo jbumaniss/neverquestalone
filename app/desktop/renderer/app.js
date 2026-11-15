@@ -3671,7 +3671,7 @@
 
   PAGES.voice = function () {
     var voice = window.BonesVoice;
-    if (!S.voiceSettings) S.voiceSettings = { output: false, listening: false, lastText: '', error: null };
+    if (!S.voiceSettings) S.voiceSettings = { output: false, listening: false, hotkey: false, lastText: '', error: null };
     var v = S.voiceSettings;
     if (!S.voiceTimer) {
       S.voiceTimer = setInterval(function () {
@@ -3708,11 +3708,19 @@
     var spoken = switchBtn('sw-voice-output', 'Speak replies aloud', v.output, function (enabled) {
       v.output = enabled; voice.setOutput(enabled); rerender(false);
     });
+    var hotkey = switchBtn('sw-voice-hotkey', 'Enable Ctrl+Shift+Space while playing', v.hotkey, function (enabled) {
+      B.voiceHotkey({ enabled: enabled }).then(function (r) {
+        v.hotkey = !isErr(r) && enabled;
+        v.error = isErr(r) ? 'The shortcut is unavailable or used by another app.' : null;
+        rerender(false);
+      });
+    });
     var input = h('textarea', { id: 'voice-text', class: 'input', maxlength: 2900, rows: 3, placeholder: 'Or type a message to your in-game companion', 'aria-label': 'Voice message draft' });
     return pageNode('page-voice', subTop(), [
       title('Voice conversation'),
       para('Microphone is off until you press Start. Stop turns it off. Speech recognition may use your operating system or browser speech service. Dictated text goes through the same AI and safety checks as a typed in-game message.', 'set-sub'),
-      group(null, [microphone, stackRow('voice-output', 'Speak AI replies', [], spoken), input,
+      group(null, [microphone, stackRow('voice-output', 'Speak AI replies', [], spoken),
+        stackRow('voice-hotkey', 'Enable Ctrl+Shift+Space while playing', [para('Optional. The shortcut is released when the app window closes.', 'set-sub')], hotkey), input,
         busyBtn('Send text', function () { var text = input.value.trim(); return text ? Promise.resolve(sendText(text)) : Promise.resolve(); }, 'btn btn-quiet', { fk: 'voice-send' }),
         v.lastText ? para('Last sent: ' + v.lastText, 'set-sub') : null,
         v.error ? para(v.error, 'set-sub') : null,
@@ -4081,6 +4089,11 @@
     if (page === 'setup' && S.page === 'setup') return; // already there: the screen stays (only a click changes it)
     if (page === 'setup') S.setup = null;
     go(page);
+  });
+  B.onVoiceHotkey(function () {
+    if (!S.voiceSettings || !S.voiceSettings.hotkey) return;
+    var toggle = function () { var button = findByKey({ fk: 'voice-microphone', n: 0 }); if (button) button.click(); };
+    if (S.page === 'voice') toggle(); else go('voice', toggle);
   });
   B.onUpdates(function (u) {
     S.updates = u;

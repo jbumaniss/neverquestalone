@@ -31,7 +31,7 @@
 // Hardware acceleration is off: the settings page is static text, and with GPU
 // compositing its GPU process held about 520 MB beside the game (57 MB without;
 // systems plan Batch 5, SY-11).
-import { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, dialog, ipcMain, protocol, session, shell, clipboard, Notification, powerMonitor, crashReporter, safeStorage } from 'electron';
+import { app, BrowserWindow, Tray, Menu, nativeImage, nativeTheme, dialog, ipcMain, protocol, session, shell, clipboard, Notification, powerMonitor, crashReporter, safeStorage, globalShortcut } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -212,6 +212,20 @@ let mock = null; // the screenshot mode's controllable mock
 let loaded = { mode: 'none', reason: null };
 let win = null;
 let microphoneArmedUntil = 0;
+let voiceHotkeyEnabled = false;
+const VOICE_HOTKEY = 'Control+Shift+Space';
+function setVoiceHotkey(enabled) {
+  if (!enabled) {
+    if (voiceHotkeyEnabled) globalShortcut.unregister(VOICE_HOTKEY);
+    voiceHotkeyEnabled = false;
+    return { ok: true, enabled: false };
+  }
+  if (voiceHotkeyEnabled) return { ok: true, enabled: true };
+  voiceHotkeyEnabled = globalShortcut.register(VOICE_HOTKEY, () => {
+    if (win && !win.isDestroyed()) win.webContents.send('nqa:voice-hotkey');
+  });
+  return voiceHotkeyEnabled ? { ok: true, enabled: true } : { ok: false, error: 'hotkey_in_use' };
+}
 let tray = null;
 let lastStatus = null;
 let paused = false;
@@ -306,6 +320,8 @@ function openWindow(page) {
   win.loadURL(pageUrl(page));
   win.once('ready-to-show', () => { if (!HEADLESS) win?.show(); else if (SHOW_WINDOW) win?.showInactive(); });
   win.on('closed', () => {
+    setVoiceHotkey(false);
+    microphoneArmedUntil = 0;
     win = null;
     keys?.clear();
     if (IS_MAC && app.dock && !HEADLESS) app.dock.hide();
@@ -745,6 +761,7 @@ async function start() {
       microphoneArmedUntil = enabled ? Date.now() + 20_000 : 0;
       return { ok: true };
     },
+    setVoiceHotkey,
     platform: process.platform,
     confirm: confirmNative,
     links: { open: openLinkUrl },

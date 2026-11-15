@@ -905,6 +905,10 @@ export const HANDLERS = {
     input: obj({ enabled: BOOL }, ['enabled']),
     run: (ctx, v) => ctx.armMicrophone?.(v.enabled) ?? { ok: false, error: 'unavailable' },
   },
+  voiceHotkey: {
+    input: obj({ enabled: BOOL }, ['enabled']),
+    run: (ctx, v) => ctx.setVoiceHotkey?.(v.enabled) ?? { ok: false, error: 'unavailable' },
+  },
   // One character ({char}), or every character the memory lists ({all: true}: Settings' Forget all,
   // one confirm for all of them, CL-words-76). The characters come from the bridge, never the page.
   forgetMemory: {

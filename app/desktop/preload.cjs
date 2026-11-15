@@ -16,7 +16,7 @@ const CALLS = [
   'stageKey', 'dropStagedKey', 'testKey', 'deleteKey', 'connectCustom', 'choose',
   'caps', 'setCaps', 'privacy', 'setPrivacy',
   'usage', 'connections', 'lastRequest',
-  'memory', 'saveMemoryNotes', 'forgetMemory', 'voiceSend', 'voiceReplies', 'voiceArm', 'transcripts', 'setRetention', 'regenerateSafetyId',
+  'memory', 'saveMemoryNotes', 'forgetMemory', 'voiceSend', 'voiceReplies', 'voiceArm', 'voiceHotkey', 'transcripts', 'setRetention', 'regenerateSafetyId',
   'findWow', 'chooseWowFolder', 'installAddon', 'addonPermissions', 'tightenAddonPermissions', 'copyPermissionsCommand',
   'copyDiagnostics', 'copyCommand', 'openLink',
   'relaunch', 'quitApp', 'resumeSending', 'setPaused',
@@ -47,5 +47,6 @@ api.onUpdates = subscribe('nqa:updates');
 // A key's test starts: the player agreed in the native dialog ({call, provider}: the
 // call's name and its AI's id, nothing of the key).
 api.onAgreed = subscribe('nqa:agreed');
+api.onVoiceHotkey = subscribe('nqa:voice-hotkey');
 
 contextBridge.exposeInMainWorld('nqa', Object.freeze(api));

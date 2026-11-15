@@ -1276,6 +1276,7 @@
   var PAGES = {};
   var renderToken = 0;
   function go(page, after) {
+    if (S.page === 'voice' && page !== 'voice') { window.BonesVoice?.stop(); window.BonesVoice?.cancelAudio(); B.voiceArm({ enabled: false }); if (S.voiceTimer) clearInterval(S.voiceTimer); S.voiceTimer = null; }
     if (page === 'general') page = 'settings';
     // The app trim: Updates is part of About, Memory's two actions are in Settings' Show more.
     if (page === 'updates') page = 'about';
@@ -3598,6 +3599,7 @@
         group(null, [
           stackRow('history-row', ST('historyLabel'), [settingsLine('history'), settingsLine('chats', ST('deletedLine'))], h('div', { class: 'row' }, keep, deleteChats)),
           subRow('memory-notes-row', 'Character memories', 'memoryNotes'),
+          subRow('voice-row', 'Voice conversation', 'voice'),
           forget || S.settingsResult.memory ? stackRow('memory-row', ST('memoryLabel'), [settingsLine('memory', ST('forgotLine'))], forget) : null,
           // The chat-frame echo: the desktop gates it (off by default: chat-logging addons keep the chat
           // frame), and the game's words send the player here (CL-words-73).
@@ -3654,6 +3656,58 @@
         ]);
       });
     });
+  };
+
+  PAGES.voice = function () {
+    var voice = window.BonesVoice;
+    if (!S.voiceSettings) S.voiceSettings = { output: false, listening: false, lastText: '', error: null };
+    var v = S.voiceSettings;
+    if (!S.voiceTimer) {
+      S.voiceTimer = setInterval(function () {
+        if (S.page !== 'voice') return;
+        B.voiceReplies({ after: S.voiceSeq || 0 }).then(function (r) {
+          if (isErr(r) || !Array.isArray(r.replies)) return;
+          var replies = r.replies;
+          if (!S.voiceInitialized) { S.voiceInitialized = true; S.voiceSeq = replies.reduce(function (n, a) { return Math.max(n, a.seq || 0); }, S.voiceSeq || 0); return; }
+          replies.forEach(function (a) {
+            if (a.seq > (S.voiceSeq || 0)) { S.voiceSeq = a.seq; voice?.speak(a.text); }
+          });
+        }).catch(function () {});
+      }, 1500);
+    }
+    var sendText = function (text) {
+      B.voiceSend({ text: text }).then(function (r) {
+        v.error = isErr(r) ? errText(r, 'Could not send to the game. Keep WoW and the companion running.') : null;
+        v.lastText = text;
+        rerender(false);
+      });
+    };
+    var microphone = busyBtn(v.listening ? 'Stop listening' : 'Hold a conversation', function () {
+      if (v.listening) { voice.stop(); v.listening = false; rerender(false); return B.voiceArm({ enabled: false }); }
+      v.error = null;
+      return B.voiceArm({ enabled: true }).then(function (permission) {
+        if (isErr(permission)) { v.error = 'Microphone permission is unavailable.'; rerender(false); return; }
+        v.listening = voice.start(function (text) { sendText(text); }, function (error) {
+          v.error = error; v.listening = false; B.voiceArm({ enabled: false }); rerender(false);
+        }, function () { v.listening = false; B.voiceArm({ enabled: false }); rerender(false); });
+        if (!v.listening) B.voiceArm({ enabled: false });
+        rerender(false);
+      });
+    }, 'btn btn-primary', { fk: 'voice-microphone' });
+    var spoken = switchBtn('sw-voice-output', 'Speak replies aloud', v.output, function (enabled) {
+      v.output = enabled; voice.setOutput(enabled); rerender(false);
+    });
+    var input = h('textarea', { id: 'voice-text', class: 'input', maxlength: 2900, rows: 3, placeholder: 'Or type a message to your in-game companion', 'aria-label': 'Voice message draft' });
+    return pageNode('page-voice', subTop(), [
+      title('Voice conversation'),
+      para('Microphone is off until you press Start. Stop turns it off. Dictated text goes through the same AI and safety checks as a typed in-game message.', 'set-sub'),
+      group(null, [microphone, stackRow('voice-output', 'Speak AI replies', [], spoken), input,
+        busyBtn('Send text', function () { var text = input.value.trim(); return text ? Promise.resolve(sendText(text)) : Promise.resolve(); }, 'btn btn-quiet', { fk: 'voice-send' }),
+        v.lastText ? para('Last sent: ' + v.lastText, 'set-sub') : null,
+        v.error ? para(v.error, 'set-sub') : null,
+        !voice?.available() ? para('Speech recognition is unavailable here; you can still type.', 'set-sub') : null,
+      ], 'voice-controls'),
+    ]);
   };
 
   // Your data (the nav's page): the switches for what's sent, under who it's sent to, and the records

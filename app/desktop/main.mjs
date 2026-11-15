@@ -211,6 +211,7 @@ let live = null; // the real bridge's holder (src/api-loader.mjs createLiveApi):
 let mock = null; // the screenshot mode's controllable mock
 let loaded = { mode: 'none', reason: null };
 let win = null;
+let microphoneArmedUntil = 0;
 let tray = null;
 let lastStatus = null;
 let paused = false;
@@ -639,8 +640,10 @@ async function start() {
     onBlocked: v => log(`refused a request to ${v.scheme ?? '?'}://${v.host ?? ''} (${v.kind})`),
   });
   for (const ses of sessions) {
-    ses.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
-    ses.setPermissionCheckHandler(() => false);
+    const micAllowed = (wc, perm) => ses === session.defaultSession && perm === 'media' &&
+      !!win && !win.isDestroyed() && wc === win.webContents && isAppPage(wc.getURL()) && Date.now() < microphoneArmedUntil;
+    ses.setPermissionRequestHandler((wc, perm, cb) => cb(micAllowed(wc, perm)));
+    ses.setPermissionCheckHandler((wc, perm) => micAllowed(wc, perm));
     ses.setSpellCheckerEnabled(false);
   }
   app.on('web-contents-created', (_e, wc) => {
@@ -738,6 +741,10 @@ async function start() {
   };
   const ipc = createIpc({
     api, keys, chatgpt, ledger, updater: ipcUpdater, appState,
+    armMicrophone: enabled => {
+      microphoneArmedUntil = enabled ? Date.now() + 20_000 : 0;
+      return { ok: true };
+    },
     platform: process.platform,
     confirm: confirmNative,
     links: { open: openLinkUrl },

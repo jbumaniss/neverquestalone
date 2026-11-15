@@ -1341,6 +1341,19 @@ export function createAppApi(opts = {}) {
       catch { return { ok: false, error: 'failed' }; }
     },
 
+    /** Speech uses the existing typed-message guard, not an unmetered second provider path. */
+    async voiceSend({ text }) {
+      if (typeof text !== 'string' || !text.trim() || Buffer.byteLength(text, 'utf8') > 2900) return bad('input');
+      try { return clean(S.bridge?.sendDesktopMessage?.(text) ?? { ok: false, error: 'no_game' }); }
+      catch { return { ok: false, error: 'failed' }; }
+    },
+
+    async voiceReplies({ after = 0 } = {}) {
+      if (!Number.isSafeInteger(after) || after < 0) return bad('input');
+      try { return clean({ ok: true, replies: S.bridge?.voiceReplies?.(after) ?? [] }); }
+      catch { return { ok: false, error: 'failed' }; }
+    },
+
     async forgetMemory(char) {
       if (!isCharName(char)) return bad('char'); // a folder name: checked where it becomes a path
       const be = S.backend;

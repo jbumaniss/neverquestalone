@@ -556,6 +556,9 @@ export function createMockApi({ now = Date.now, platform = process.platform, del
       (s.memoryNotes || (s.memoryNotes = {}))[char] = text;
       return { ok: true };
     },
+    async voiceSend({ text }) { return typeof text === 'string' && text.trim() ? { ok: true, chatId: 'main' } : { ok: false, error: 'bad_input' }; },
+    async voiceReplies() { return { ok: true, replies: [] }; },
+    async voiceArm() { return { ok: true }; },
     async forgetMemory(char) { s.memoryChars = s.memoryChars.filter(c => c !== char); return { ok: true }; },
     async transcripts({ deleteAll } = {}) {
       if (deleteAll) { const n = s.transcripts; s.transcripts = 0; return { ok: true, deleted: n, retentionDays: s.retentionDays ?? 30 }; }

@@ -893,6 +893,18 @@ export const HANDLERS = {
     input: obj({ char: { type: 'string', maxLength: 64, pattern: PATTERNS.character }, text: { type: 'string', maxLength: 4000 } }, ['char', 'text']),
     run: (ctx, v) => ctx.api.saveMemoryNotes(v),
   },
+  voiceSend: {
+    input: obj({ text: { type: 'string', minLength: 1, maxLength: 2900 } }, ['text']),
+    run: (ctx, v) => ctx.api.voiceSend(v),
+  },
+  voiceReplies: {
+    input: obj({ after: { type: 'integer', minimum: 0 } }, [], { optional: true }),
+    run: (ctx, v) => ctx.api.voiceReplies(v),
+  },
+  voiceArm: {
+    input: obj({ enabled: BOOL }, ['enabled']),
+    run: (ctx, v) => ctx.armMicrophone?.(v.enabled) ?? { ok: false, error: 'unavailable' },
+  },
   // One character ({char}), or every character the memory lists ({all: true}: Settings' Forget all,
   // one confirm for all of them, CL-words-76). The characters come from the bridge, never the page.
   forgetMemory: {

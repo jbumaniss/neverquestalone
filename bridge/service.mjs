@@ -10,6 +10,7 @@
 // else is dropped unread and never logged.
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { parsePayload, parseRecord, inflateBody } from './transport/records.mjs';
 import { createSignals, ALIVE_EVERY_MS } from './transport/signals.mjs';
 import { createPublisher } from './transport/publisher.mjs';
@@ -1885,6 +1886,21 @@ export function createBridge(config, deps) {
     publisher,
     handlePayload,
     handleRecord,
+    /** Typed desktop input, including opt-in dictation, through the normal guarded outbox. */
+    sendDesktopMessage(text) {
+      if (typeof text !== 'string' || !text.trim() || Buffer.byteLength(text, 'utf8') > 2900) return { ok: false, error: 'bad_input' };
+      const token = S.lastToken;
+      const chat = Object.values(S.chats).filter(c => c.token === token).sort((a, b) => (b.seen || 0) - (a.seen || 0))[0];
+      if (!token || !S.tokens[token] || !chat) return { ok: false, error: 'no_active_chat' };
+      const key = `desktop-${randomUUID()}`;
+      onMsg({ token, chat: chat.id, key, text, context: null, args: {} }, S.tokens[token], 'desktop');
+      return { ok: true, chatId: chat.id, key };
+    },
+    voiceReplies(after = 0) {
+      const token = S.lastToken;
+      if (!token) return [];
+      return store.recordsFor(token).filter(r => r.t === 'reply' && r.seq > after).map(r => ({ seq: r.seq, chatId: r.chat, text: r.summary || r.text || '' }));
+    },
     buildSlot,
     checkRuns,
     flushOutbox,

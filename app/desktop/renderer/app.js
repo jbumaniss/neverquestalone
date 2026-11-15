@@ -3683,8 +3683,8 @@
           if (!v.output || isErr(current)) return;
           if (v.chatId !== current.chatId) {
             v.chatId = current.chatId;
-            S.voiceSeq = current.after || 0; // On a new chat, never replay historical replies.
-            return;
+            // Reply sequences are global to this game session. Keep the last
+            // sequence when the active chat changes, so its first reply isn't lost.
           }
           return B.voiceReplies({ after: S.voiceSeq || 0, chatId: current.chatId }).then(function (r) {
             if (!v.output || current.chatId !== v.chatId || isErr(r) || !Array.isArray(r.replies)) return;
@@ -3720,11 +3720,15 @@
     }, 'btn btn-primary', { fk: 'voice-microphone' });
     var spoken = switchBtn('sw-voice-output', 'Speak replies aloud', v.output, function (enabled) {
       v.output = enabled; voice.setOutput(enabled);
-      if (enabled) B.voiceCurrent({}).then(function (current) {
+      if (enabled) {
+        v.chatId = null;
+        S.voiceSeq = 0;
+        B.voiceCurrent({}).then(function (current) {
         if (!v.output || isErr(current)) return;
         v.chatId = current.chatId;
         S.voiceSeq = current.after || 0;
-      }).catch(function () {});
+        }).catch(function () {});
+      }
       rerender(false);
     });
     var hotkey = switchBtn('sw-voice-hotkey', 'Enable Ctrl+Shift+Space while playing', v.hotkey, function (enabled) {

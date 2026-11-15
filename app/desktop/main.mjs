@@ -215,7 +215,6 @@ let win = null;
 let microphoneArmedUntil = 0;
 let voiceHotkeyEnabled = false;
 const voiceOutput = createVoiceOutput();
-app.on('will-quit', () => voiceOutput.stop());
 const VOICE_HOTKEY = 'Control+Shift+Space';
 function setVoiceHotkey(enabled) {
   if (!enabled) {
@@ -860,6 +859,7 @@ const quit = createQuitFlow({
   canRelaunch: () => updater?.status?.()?.state !== 'ready',
   onCommit: () => {
     live?.commit(); // the holder boots nothing again from here on
+    voiceOutput.stop();
     try { tray?.destroy(); } catch {}
     tray = null;
     // The self-test's relaunch run (SY-102-2): a second launch while this quit is committed (SY-102-3).

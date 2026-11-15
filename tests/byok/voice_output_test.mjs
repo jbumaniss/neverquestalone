@@ -10,6 +10,7 @@ test('Windows speech invokes a fixed executable with data encoded, never a shell
     runs.push({ file, args, opts });
     const child = new EventEmitter();
     child.kill = () => { child.killed = true; };
+    child.stdin = { end: data => { child.input = data; } };
     children.push(child);
     return child;
   } });
@@ -20,8 +21,9 @@ test('Windows speech invokes a fixed executable with data encoded, never a shell
   assert.deepEqual(args.slice(0, 3), ['-NoProfile', '-NonInteractive', '-EncodedCommand']);
   assert.equal(opts.shell, false);
   const script = Buffer.from(args[3], 'base64').toString('utf16le');
-  assert.ok(script.includes(Buffer.from(input, 'utf16le').toString('base64')));
+  assert.ok(script.includes('[Console]::In.ReadToEnd()'));
   assert.ok(!script.includes(input));
+  assert.equal(children[0].input, Buffer.from(input, 'utf16le').toString('base64'));
   assert.deepEqual(output.speak('Second reply'), { ok: true });
   assert.equal(children[0].killed, true, 'a newer reply interrupts the old voice');
   assert.deepEqual(output.stop(), { ok: true });

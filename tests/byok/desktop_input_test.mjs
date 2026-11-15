@@ -29,3 +29,18 @@ test('desktop input cannot send when no live game chat exists', () => {
   assert.deepEqual(input.current(), { ok: false, error: 'no_active_chat' });
   assert.deepEqual(input.replies(0, 'none'), []);
 });
+
+test('a global reply cursor follows a newly active in-game chat without replaying old replies', () => {
+  let active = 'first';
+  const rec = [{ t: 'reply', seq: 2, chat: 'first', text: 'Earlier reply' }];
+  const input = createDesktopInput({
+    currentToken: () => 'game', tokenState: () => ({}),
+    chats: () => [{ id: active, token: 'game', seen: 1 }],
+    acceptMessage: () => {}, records: () => rec,
+  });
+  const before = input.current();
+  active = 'second';
+  rec.push({ t: 'reply', seq: 3, chat: 'second', text: 'New answer' });
+  assert.equal(input.current().chatId, 'second');
+  assert.deepEqual(input.replies(before.after, 'second'), [{ seq: 3, chatId: 'second', text: 'New answer' }]);
+});

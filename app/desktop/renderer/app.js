@@ -3700,7 +3700,7 @@
     var input = h('textarea', { id: 'voice-text', class: 'input', maxlength: 2900, rows: 3, placeholder: 'Or type a message to your in-game companion', 'aria-label': 'Voice message draft' });
     return pageNode('page-voice', subTop(), [
       title('Voice conversation'),
-      para('Microphone is off until you press Start. Stop turns it off. Dictated text goes through the same AI and safety checks as a typed in-game message.', 'set-sub'),
+      para('Microphone is off until you press Start. Stop turns it off. Speech recognition may use your operating system or browser speech service. Dictated text goes through the same AI and safety checks as a typed in-game message.', 'set-sub'),
       group(null, [microphone, stackRow('voice-output', 'Speak AI replies', [], spoken), input,
         busyBtn('Send text', function () { var text = input.value.trim(); return text ? Promise.resolve(sendText(text)) : Promise.resolve(); }, 'btn btn-quiet', { fk: 'voice-send' }),
         v.lastText ? para('Last sent: ' + v.lastText, 'set-sub') : null,

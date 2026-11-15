@@ -1317,6 +1317,7 @@ export function createAppApi(opts = {}) {
       let text = '';
       let autoText = '';
       let notesText = '';
+      let entries = [];
       let updated = 0;
       if (typeof be?.memory === 'function') {
         let r = null;
@@ -1326,6 +1327,7 @@ export function createAppApi(opts = {}) {
         text = typeof r.text === 'string' ? r.text : '';
         autoText = typeof r.generatedText === 'string' ? r.generatedText : '';
         notesText = typeof r.notesText === 'string' ? r.notesText : '';
+        entries = Array.isArray(r.entries) ? r.entries : [];
         updated = Math.max(0, ...(Array.isArray(r.files) ? r.files.map(f => f?.modifiedAt ?? 0) : []));
       } else {
         const i = char.indexOf('-');
@@ -1334,13 +1336,21 @@ export function createAppApi(opts = {}) {
       }
       if (!text && d) text = [...(d.character ?? []), ...(d.recent ?? [])].join('\n');
       if (!autoText && d) autoText = [...(d.character ?? []), ...(d.recent ?? []), ...(d.quests ?? [])].join('\n');
-      return clean({ char, digest: text, autoText, notes: (d?.notes ?? []).map(t => ({ at: updated, text: String(t) })), notesText, updated });
+      return clean({ char, digest: text, autoText, notes: (d?.notes ?? []).map(t => ({ at: updated, text: String(t) })), notesText,
+        entries: entries.map(e => ({ id: e.id, text: e.text, createdAt: e.createdAt })), updated });
     },
 
     async saveMemoryNotes({ char, text }) {
       if (!isCharName(char) || typeof text !== 'string' || text.length > 4_000) return bad('input');
       if (typeof S.backend?.saveMemoryNotes !== 'function') return bad('unavailable');
       try { return clean(await S.backend.saveMemoryNotes(char, text)); }
+      catch { return { ok: false, error: 'failed' }; }
+    },
+
+    async addMemoryEntry({ char, text }) {
+      if (!isCharName(char) || typeof text !== 'string' || !text.trim() || text.length > 500) return bad('input');
+      if (typeof S.backend?.addMemoryEntry !== 'function') return bad('unavailable');
+      try { return clean(await S.backend.addMemoryEntry(char, text)); }
       catch { return { ok: false, error: 'failed' }; }
     },
 

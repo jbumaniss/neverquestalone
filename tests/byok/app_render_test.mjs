@@ -318,7 +318,7 @@ test('character memories: reopen shows the existing notes, not an empty field fr
   assert.ok(r.calls.some(c => c[0] === 'memory' && c[1] === 'Thokk-Testrealm'), 'the character read passed IPC validation');
 });
 
-test('character memories: create a character and add a saved memory from the page', async () => {
+test('character memories: create a character and add a card that clears its input, without rewriting extra notes', async () => {
   const r = await pageRig({ state: READY, hash: 'memoryNotes' });
   await r.press(fk(r, 'toggle-create-character'));
   const name = r.document.getElementById('memory-create-name');
@@ -334,17 +334,46 @@ test('character memories: create a character and add a saved memory from the pag
   assert.equal(r.document.getElementById('memory-character').value, 'Malderx-CAMWOW EU5 Realm 3 PvE');
 
   const entry = r.document.getElementById('memory-add-entry');
-  entry.value = 'Remember my rogue build';
+  entry.value = 'Remember my Rogue build';
+  entry.dispatchEvent(r.event('input'));
+  await r.push(); // A background redraw must not detach the draft or its button handler.
+  await r.press(fk(r, 'add-memory-entry'));
+  assert.deepEqual(r.calls.filter(c => c[0] === 'addMemoryEntry').map(c => c[1]), [
+    { char: 'Malderx-CAMWOW EU5 Realm 3 PvE', text: 'Remember my Rogue build' },
+  ]);
+  assert.equal((await r.api.memory('Malderx-CAMWOW EU5 Realm 3 PvE')).entries[0].text, 'Remember my Rogue build');
+  assert.equal((await r.api.memory('Malderx-CAMWOW EU5 Realm 3 PvE')).notesText, '');
+  await r.settle(30);
+  assert.match(r.pageText(), /Memory saved/);
+  assert.match(r.document.querySelector('.memory-entry-card').textContent, /Remember my Rogue build/);
+  assert.equal(r.document.getElementById('memory-notes-editor').value, '');
+  assert.equal(r.document.getElementById('memory-add-entry').value, '');
+});
+
+test('character memories: closing and reopening shows saved cards and notes, but no stale Add draft', async () => {
+  const r = await pageRig({ state: { ...READY, memoryNotes: { 'Thokk-Testrealm': 'My saved notes' } }, hash: 'memoryNotes' });
+  const entry = r.document.getElementById('memory-add-entry');
+  entry.value = 'Remember my Rogue build';
   entry.dispatchEvent(r.event('input'));
   await r.press(fk(r, 'add-memory-entry'));
-  assert.deepEqual(r.calls.filter(c => c[0] === 'saveMemoryNotes').map(c => c[1]), [
-    { char: 'Malderx-CAMWOW EU5 Realm 3 PvE', text: '- Remember my rogue build' },
-  ]);
-  assert.equal((await r.api.memory('Malderx-CAMWOW EU5 Realm 3 PvE')).notesText, '- Remember my rogue build');
-  await r.settle(30);
-  assert.match(r.pageText(), /Saved to disk/);
-  assert.equal(r.document.getElementById('memory-notes-editor').value, '- Remember my rogue build');
-  assert.equal(r.document.getElementById('memory-add-entry').value, '');
+  const saved = await r.api.memory('Thokk-Testrealm');
+  const fresh = await pageRig({ state: { ...READY,
+    memoryNotes: { 'Thokk-Testrealm': saved.notesText }, memoryEntries: { 'Thokk-Testrealm': saved.entries },
+  }, hash: 'memoryNotes' });
+  assert.match(fresh.document.querySelector('.memory-entry-card').textContent, /Remember my Rogue build/);
+  assert.equal(fresh.document.getElementById('memory-add-entry').value, '');
+  assert.equal(fresh.document.getElementById('memory-notes-editor').value, 'My saved notes');
+});
+
+test('character memories: a failed Add leaves the draft and never claims it was saved', async () => {
+  const r = await pageRig({ state: { ...READY, results: { addMemoryEntry: { ok: false, error: 'failed' } } }, hash: 'memoryNotes' });
+  const entry = r.document.getElementById('memory-add-entry');
+  entry.value = 'Remember my Rogue build';
+  entry.dispatchEvent(r.event('input'));
+  await r.press(fk(r, 'add-memory-entry'));
+  assert.equal(r.document.getElementById('memory-add-entry').value, 'Remember my Rogue build');
+  assert.equal(r.document.querySelector('.memory-entry-card'), null);
+  assert.doesNotMatch(r.pageText(), /Memory saved/);
 });
 const IN_GAME = { ...READY, wow: { found: true, running: true } };
 const OPENAI = { keys: { openai: { masked: 'sk-proj-…xxxx', state: 'ok' } }, choice: { provider: 'openai', model: 'gpt-6-luna', effort: 'low' }, addonInstalled: true };

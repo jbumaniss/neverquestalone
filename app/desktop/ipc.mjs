@@ -893,6 +893,10 @@ export const HANDLERS = {
     input: obj({ char: { type: 'string', maxLength: 64, pattern: PATTERNS.character }, text: { type: 'string', maxLength: 4000 } }, ['char', 'text']),
     run: (ctx, v) => ctx.api.saveMemoryNotes(v),
   },
+  addMemoryEntry: {
+    input: obj({ char: { type: 'string', maxLength: 64, pattern: PATTERNS.character }, text: { type: 'string', minLength: 1, maxLength: 500 } }, ['char', 'text']),
+    run: (ctx, v) => ctx.api.addMemoryEntry(v),
+  },
   createMemoryCharacter: {
     input: obj({ char: { type: 'string', maxLength: 64, pattern: PATTERNS.character } }, ['char']),
     run: (ctx, v) => ctx.api.createMemoryCharacter(v),

@@ -52,3 +52,39 @@ in that script. Do not bypass missing-helper or package integrity checks.
 Before the new installer, set existing NeverQuestAlone builds to manual updates/off,
 because the previous released application can still update itself. The new fork build
 enforces notification-only operation independently of saved preferences.
+
+## Personal fork upgrade: implementation-first handoff
+
+The installed 1.4.19 app predates the newer feature-branch changes. Keep it installed
+and usable while reviewing the branch. A new installer is required before the new
+Character memories and Voice conversation settings appear; editing source code alone
+does not modify the running app. Never install an unsigned personal build on someone
+else's PC or treat its hash as a publisher signature.
+
+After the full implementation is complete, run the build and test commands above.
+Do not run the installer until the build and helper checks succeed. Save a SHA-256
+hash of the generated setup executable, then install it with WoW closed. The app's
+addon installation flow must install the packaged addon into the selected WoW
+installation; having Questie or Auctionator installed separately is optional.
+
+Manual Windows/WoW acceptance, only after the new build is installed:
+
+1. Sign in with the existing ChatGPT account, send one message and receive one reply.
+2. Save character-specific notes; quit/relaunch and check the same character's notes
+   are still there. Switch characters to check separation.
+3. Under Settings, enable Voice conversation only when wanted. Test typed voice-page
+   text, opt-in microphone, stop, output speech and optional Ctrl+Shift+Space while
+   WoW has focus. If speech recognition is unsupported, the typed path remains usable.
+4. With Questie installed, check a marked target is described using Questie's public
+   objective API; without it, no error or misleading quest marker appears.
+5. With Auctionator installed and a recent scan, link an item and check the cached
+   value is advisory and labeled as a last-scan price; no trading is automated.
+6. Enter a dungeon/party and ask for guidance. The read-only instance, group and
+   target facts must remain optional; the companion must not operate the character.
+7. Check screen capture, routes, map pins and full-screen switching. The colored
+   top-left pixels are the existing visual transport; Screen reading off suppresses
+   them after `/reload`, but also disables live screen capture. Never cover or
+   recolor the transport while capture is in use.
+
+Implementation and verification statuses are recorded separately in the private
+project reports. No QA result is implied by the existence of a feature-branch commit.

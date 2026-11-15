@@ -3700,7 +3700,7 @@
         rerender(false);
       });
     };
-    var microphone = busyBtn(v.listening ? 'Stop listening' : 'Hold a conversation', function () {
+    var microphone = busyBtn(v.listening ? 'Stop listening' : 'Start listening', function () {
       if (v.listening) { voice.stop(); v.listening = false; rerender(false); return B.voiceArm({ enabled: false }); }
       v.error = null;
       return B.voiceArm({ enabled: true }).then(function (permission) {

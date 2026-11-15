@@ -283,6 +283,19 @@ const { FAKE_KEY, FAKE_BAD_KEY } = await import('../../app/desktop/src/screensho
 const HAIKU = { provider: 'anthropic', model: 'claude-haiku-4-5', effort: null };
 const SAVED = { anthropic: { masked: 'sk-ant-…xxxx', state: 'ok' } };
 const READY = { keys: SAVED, choice: HAIKU, addonInstalled: true };
+
+test('character notes save the visible draft after a background status redraw', async () => {
+  const r = await pageRig({ state: READY, hash: 'memoryNotes' });
+  const editor = r.document.getElementById('memory-notes-editor');
+  assert.ok(editor, 'a known character has an editor');
+  await r.push(); // Replaces handlers while keeping the visible textarea node.
+  editor.value = 'Testing character memory persistence.';
+  editor.dispatchEvent(r.event('input'));
+  await r.press(fk(r, 'save-memory-notes'));
+  assert.deepEqual(r.calls.filter(c => c[0] === 'saveMemoryNotes').map(c => c[1]), [
+    { char: 'Thokk-Testrealm', text: 'Testing character memory persistence.' },
+  ]);
+});
 const IN_GAME = { ...READY, wow: { found: true, running: true } };
 const OPENAI = { keys: { openai: { masked: 'sk-proj-…xxxx', state: 'ok' } }, choice: { provider: 'openai', model: 'gpt-6-luna', effort: 'low' }, addonInstalled: true };
 // Other (custom) at a server on this computer: Ollama's OpenAI-compatible address, no key.

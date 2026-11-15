@@ -3658,7 +3658,9 @@
             rerender(false, function () { focusEl(document.getElementById('memory-notes-editor')); });
           });
         };
-        var save = busyBtn('Save notes', function () { return saveEdited(editor.value); }, 'btn btn-primary', { fk: 'save-memory-notes' });
+        // A status push patches the visible textarea in place, but replaces button handlers.
+        // The handler's captured editor may then be a detached node with an old value.
+        var save = busyBtn('Save notes', function () { return saveEdited(S.memoryNotesDrafts[selected]); }, 'btn btn-primary', { fk: 'save-memory-notes' });
         var clear = busyBtn('Clear notes', function () { return saveEdited(''); }, 'btn btn-quiet', { fk: 'clear-memory-notes' });
         return pageNode('page-memory-notes', subTop(), [
           title('Character memories'),

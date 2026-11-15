@@ -1,6 +1,6 @@
 # Build the personal NeverQuestAlone Windows app locally
 
-This fork starts from `feature/chatgpt-subscription-auth`. It is not an upstream release.
+This personal build uses `feature/modular-game-context` (version 1.4.20). It is not an upstream release.
 Its packaged application **checks for upstream release notices only**. It never downloads or installs
 upstream binaries. A release notice is not approval to run someone else's build.
 
@@ -16,7 +16,7 @@ upstream binaries. A release notice is not approval to run someone else's build.
 ```powershell
 git clone https://github.com/jbumaniss/neverquestalone.git
 cd neverquestalone
-git switch feature/chatgpt-subscription-auth
+git switch feature/modular-game-context
 node --version
 zig version
 npm ci
@@ -67,20 +67,25 @@ hash of the generated setup executable, then install it with WoW closed. The app
 addon installation flow must install the packaged addon into the selected WoW
 installation; having Questie or Auctionator installed separately is optional.
 
-Manual Windows/WoW acceptance, only after the new build is installed:
+Manual Windows/WoW acceptance, only after the new build is installed. A microphone is **not required**: use typed questions and the **Test speaker** button. The in-game addon can read replies aloud on Windows when speech output is enabled; speech input remains optional.
 
 1. Sign in with the existing ChatGPT account, send one message and receive one reply.
 2. Save character-specific notes; quit/relaunch and check the same character's notes
    are still there. Switch characters to check separation.
-3. Under Settings, enable Voice conversation only when wanted. Test typed voice-page
-   text, opt-in microphone, stop, output speech and optional Ctrl+Shift+Space while
-   WoW has focus. If speech recognition is unsupported, the typed path remains usable.
+3. Under Settings, enable Voice conversation only when wanted. Use **Test speaker**, then
+   send typed text and verify a reply can be heard through Windows speakers. Ask in game
+   and confirm the desktop reads the reply aloud. Microphone, speech recognition and
+   optional Ctrl+Shift+Space can be tested later when a microphone is available.
 4. With Questie installed, check a marked target is described using Questie's public
    objective API; without it, no error or misleading quest marker appears.
 5. With Auctionator installed and a recent scan, link an item and check the cached
    value is advisory and labeled as a last-scan price; no trading is automated.
 6. Enter a dungeon/party and ask for guidance. The read-only instance, group and
    target facts must remain optional; the companion must not operate the character.
+   Also ask about bags, abilities, reputations, equipment, combat buffs, collections,
+   and—with those windows open—bank items, mail and vendors. Responses are bounded
+   summaries, not guaranteed complete exports; the addon must not infer zero from
+   unavailable game APIs. Party summaries must never reveal party member names.
 7. Check screen capture, routes, map pins and full-screen switching. The colored
    top-left pixels are the existing visual transport; Screen reading off suppresses
    them after `/reload`, but also disables live screen capture. Never cover or

@@ -39,7 +39,7 @@
 local ADDON_NAME, ns = ...
 
 ns.ADDON = ADDON_NAME or "NeverQuestAlone"
-ns.VERSION = "1.4.19"
+ns.VERSION = "1.4.20"
 ns.PROTOCOL = 2
 ns.SLOT_COUNT = 200
 ns.SLOT_PREFIX = "NQA_S"
@@ -338,8 +338,8 @@ end
 -- Call a game API that may not exist or may throw, and get its returns or nothing.
 function ns.Try(fn, ...)
 	if type(fn) ~= "function" then return nil end
-	local ok, a, b, c, d, e, f, g = pcall(fn, ...)
-	if ok then return a, b, c, d, e, f, g end
+	local ok, a, b, c, d, e, f, g, h, i, j, k, l = pcall(fn, ...)
+	if ok then return a, b, c, d, e, f, g, h, i, j, k, l end
 end
 
 -- A method this client has (a CheckButton's SetChecked, say), called safely

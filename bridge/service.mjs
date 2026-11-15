@@ -30,7 +30,7 @@ import { mapFailureLine, mapFailureLog, mapTrimLine } from './byok/runtime/repai
 import { createAutoFuse, AUTO_FUSE, TYPED_GUARD, autoPausedLine, sendPausedLine } from './byok/usage/fuse.mjs';
 import { cleanRequestId } from './byok/providers/errors.mjs';
 
-export const BRIDGE_VERSION = '1.4.19';
+export const BRIDGE_VERSION = '1.4.20';
 export const ACKED_KEEP = 50;
 export const RERING_FAST_MS = 10000; // PROTOCOL §3: re-ring every 10 s six times,
 export const RERING_FAST_COUNT = 6;
@@ -1896,6 +1896,7 @@ export function createBridge(config, deps) {
     /** Typed desktop input, including opt-in dictation, through the normal guarded outbox. */
     sendDesktopMessage: desktopInput.send,
     voiceReplies: desktopInput.replies,
+    voiceCurrent: desktopInput.current,
     buildSlot,
     checkRuns,
     flushOutbox,

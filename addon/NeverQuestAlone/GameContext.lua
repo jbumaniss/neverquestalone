@@ -2,6 +2,23 @@
 local _, ns = ...
 local G = {}
 ns.GameContext = G
+local collectors, names = {}, {}
+
+-- Each read-only capability owns its own collector. Priority determines which
+-- lines survive the context byte budget; existing context sections keep their
+-- original order and the complete quest-id line is appended separately.
+function G.Register(name, priority, collect, relevant)
+	if type(name) ~= "string" or name == "" or names[name]
+		or type(priority) ~= "number" or type(collect) ~= "function"
+		or (relevant ~= nil and type(relevant) ~= "function") then return false end
+	names[name] = true
+	collectors[#collectors + 1] = { name = name, priority = priority, read = collect, relevant = relevant }
+	table.sort(collectors, function(a, b)
+		if a.priority == b.priority then return a.name < b.name end
+		return a.priority < b.priority
+	end)
+	return true
+end
 
 local function client(lines, Try)
 	local version, build, _, toc = Try(GetBuildInfo)
@@ -147,14 +164,25 @@ local function fit(lines, questLine)
 	return s ~= "" and (s .. "\n" .. questLine) or questLine
 end
 
-function G.Build(Try, Money, Professions)
+function G.Build(Try, Money, Professions, question)
 	local lines = {}
-	client(lines, Try)
-	character(lines, Try)
-	location(lines, Try)
-	questie(lines, Try)
-	progress(lines, Try, Money)
-	talents(lines, Try)
-	professions(lines, Professions)
+	for _, collector in ipairs(collectors) do
+		local relevant = not collector.relevant or (type(question) == "string" and ns.Try(collector.relevant, question:lower()) == true)
+		-- A missing/unsupported API or a failing optional adapter must not prevent
+		-- a player from sending their message or their complete quest list.
+		if relevant then
+			local before = #lines
+			local ok = pcall(collector.read, lines, Try, Money, Professions, question)
+			if not ok then while #lines > before do table.remove(lines) end end
+		end
+	end
 	return fit(lines, questLog())
 end
+
+G.Register("client", 10, client)
+G.Register("character", 20, character)
+G.Register("location", 30, location)
+G.Register("questie", 40, questie)
+G.Register("progress", 50, function(lines, Try, Money) progress(lines, Try, Money) end)
+G.Register("talents", 60, talents)
+G.Register("professions", 70, function(lines, _, _, Professions) professions(lines, Professions) end)

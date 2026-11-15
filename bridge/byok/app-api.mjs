@@ -1354,6 +1354,11 @@ export function createAppApi(opts = {}) {
       catch { return { ok: false, error: 'failed' }; }
     },
 
+    async voiceCurrent() {
+      try { return clean(S.bridge?.voiceCurrent?.() ?? { ok: false, error: 'no_game' }); }
+      catch { return { ok: false, error: 'failed' }; }
+    },
+
     async forgetMemory(char) {
       if (!isCharName(char)) return bad('char'); // a folder name: checked where it becomes a path
       const be = S.backend;

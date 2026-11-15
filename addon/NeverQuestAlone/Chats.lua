@@ -784,8 +784,8 @@ function C.Professions()
 	return ns.CharacterSkills.Professions()
 end
 
-function C.GameContext()
-	return ns.GameContext.Build(Try, Money, C.Professions)
+function C.GameContext(question)
+	return ns.GameContext.Build(Try, Money, C.Professions, question)
 end
 
 -- The context's lines that the companion's state doesn't carry (PROTOCOL §2.6,
@@ -1046,7 +1046,7 @@ function C.Send(text, chatId, opts)
 	-- the state doesn't carry changed, or the state won't reach the bridge in this
 	-- message's frame (PROTOCOL §2.6).
 	-- A bare message reads none of it (nor the quest log).
-	local ctx = (not skip and db.settings.context) and C.GameContext() or ""
+	local ctx = (not skip and db.settings.context) and C.GameContext(text) or ""
 	R.questShare = nil
 	if not skip and ctx ~= (R.contextSent or "") then
 		local nextKey = R.nonce .. "_" .. ns.Int(db.sendCounter + 1)

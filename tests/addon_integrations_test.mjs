@@ -88,3 +88,55 @@ test('game context remains delegated through Chats and preserves the quest-log c
   assert.match(text, /Game: World of Warcraft/);
   assert.equal(typeof text, 'string');
 });
+
+test('context collectors are independently registered, ordered and failure-isolated', () => {
+  const vm = newVM();
+  vm.run(`
+    addedFirst = NS.GameContext.Register("first-test", 35, function(lines) lines[#lines + 1] = "Extra: first" end)
+    addedAgain = NS.GameContext.Register("first-test", 36, function(lines) lines[#lines + 1] = "Extra: duplicate" end)
+    addedBroken = NS.GameContext.Register("broken-test", 36, function(lines)
+      lines[#lines + 1] = "Extra: leaked"
+      error("missing API")
+    end)
+    addedSecond = NS.GameContext.Register("second-test", 37, function(lines) lines[#lines + 1] = "Extra: second" end)
+    contextAfter = NS.Chats.GameContext()
+  `);
+  assert.equal(vm.bool('addedFirst'), true);
+  assert.equal(vm.bool('addedAgain'), false);
+  assert.equal(vm.bool('addedBroken'), true);
+  assert.equal(vm.bool('addedSecond'), true);
+  const ctx = vm.evaluate('contextAfter');
+  assert.match(ctx, /Extra: first\nExtra: second/);
+  assert.match(ctx, /Character: Testchar/);
+  assert.doesNotMatch(ctx, /duplicate/);
+  assert.doesNotMatch(ctx, /leaked/);
+});
+
+test('unit-status adapter reads supported data and omits unavailable or secret values', () => {
+  const vm = newVM();
+  vm.run(`
+    UnitHealth = function(unit) return unit == "player" and 55 or nil end
+    UnitHealthMax = function(unit) return unit == "player" and 100 or nil end
+    UnitPower = function(unit) return unit == "player" and 32 or nil end
+    UnitPowerMax = function(unit) return unit == "player" and 100 or nil end
+    UnitExists = function(unit) return unit == "target" end
+    UnitName = function(unit) if unit == "target" then return "Forest Wolf" else return "Testy" end end
+    UnitLevel = function(unit) return unit == "target" and 9 or 11 end
+    liveContext = NS.Chats.GameContext()
+  `);
+  const live = vm.evaluate('liveContext');
+  assert.match(live, /Status: health 55\/100, power 32\/100/);
+  assert.match(live, /Target: Forest Wolf, level 9/);
+  vm.run('UnitHealth = nil; UnitHealthMax = nil; UnitPower = nil; UnitPowerMax = nil; UnitExists = nil; noStatus = NS.Chats.GameContext()');
+  assert.doesNotMatch(vm.evaluate('noStatus'), /Status:|Target:/);
+  vm.run(`
+    local readable = NS.Readable
+    NS.Readable = function(v) if v == "restricted" then return nil end return readable(v) end
+    UnitHealth = function() return "restricted" end
+    UnitHealthMax = function() return 100 end
+    UnitExists = function() return true end
+    UnitName = function() return "restricted" end
+    secretContext = NS.Chats.GameContext()
+  `);
+  assert.doesNotMatch(vm.evaluate('secretContext'), /Status:|Target:/);
+});

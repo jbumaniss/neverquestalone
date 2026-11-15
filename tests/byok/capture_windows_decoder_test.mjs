@@ -524,7 +524,7 @@ test('the helper\'s version resource shows no version a release never had: "(unr
 // With zig (ZIG=/path/to/zig, or zig on PATH), the whole helper cross-compiles with -Werror.
 const ZIG = process.env.ZIG || 'zig';
 const hasZig = spawnSync(ZIG, ['version'], { encoding: 'utf8' }).status === 0;
-test('the helper cross-compiles for Windows with -Wall -Wextra -Werror and imports no networking DLL', { skip: hasZig ? false : 'needs zig (ZIG=/path/to/zig)' }, () => {
+test('the helper cross-compiles for Windows with -Wall -Wextra -Werror and imports no networking DLL', { skip: process.env.NQA_NATIVE_VERIFY !== '1' && process.env.npm_lifecycle_event !== 'test:native' ? 'run npm run test:native for the expensive cross-compile' : (hasZig ? false : 'needs zig (ZIG=/path/to/zig)') }, () => {
   const exe = path.join(TMP, 'nqa-capture.exe');
   const r = spawnSync(ZIG, ['cc', '-target', 'x86_64-windows-gnu', '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', '-municode', '-DUNICODE', '-D_UNICODE',
     '-s', '-o', exe, ...['main.c', 'decoder.c', 'errlimit.c', 'jsonl.c', 'ppm.c', 'winpick.c', 'nqa-capture.rc'].map(f => path.join(SRC, f)),

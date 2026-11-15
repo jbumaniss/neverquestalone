@@ -368,7 +368,7 @@ test('TH12 on Windows: icacls write grants to Everyone, Users or Authenticated U
   assert.equal(r.ok, false);
   assert.equal(r.worldWritable, true);
   assert.equal(r.fixable, false);
-  assert.deepEqual(calls.map(c => [c.cmd, c.argv]), [['C:\\Windows\\System32\\icacls.exe', ['C:\\WoW\\_forever_\\Interface\\AddOns']]], 'read only, one argument list, by its full path');
+  assert.deepEqual(calls.map(c => [c.cmd.toLowerCase(), c.argv]), [['c:\\windows\\system32\\icacls.exe', ['C:\\WoW\\_forever_\\Interface\\AddOns']]], 'read only, one argument list, by its full path (Windows path case-insensitive)');
   const tight = runStub({ icacls: { status: 0, stdout: 'X NT AUTHORITY\\SYSTEM:(F)\r\n  BUILTIN\\Users:(RX)\r\n' } });
   assert.equal(checkAddonsPermissions('C:\\x', { platform: 'win32', run: tight.run }).ok, true);
 });

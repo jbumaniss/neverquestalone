@@ -852,7 +852,7 @@ test('the feed: GitHub, public, releases only, never a token; the build names th
   assert.equal(releasesRepo({ releases: { owner: 'x/../y', repo: 'r' } }).valid, false);
   const src = fs.readFileSync(path.join(APP, 'updater.mjs'), 'utf8').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
   assert.doesNotMatch(src, /token\s*:|GH_TOKEN|GITHUB_TOKEN|requestHeaders\s*=|addAuthHeader/i, 'no token anywhere in the updater');
-  for (const re of [/autoDownload = false/, /allowDowngrade = false/, /autoInstallOnAppQuit = true/, /disableWebInstaller = true/, /guardDownloads\(updater/]) assert.match(src, re);
+  for (const re of [/autoDownload = false/, /allowDowngrade = false/, /autoInstallOnAppQuit = !manualUpdatesOnly/, /autoInstallOnAppQuit = false/, /disableWebInstaller = true/, /guardDownloads\(updater/]) assert.match(src, re);
 });
 
 test('"Never check": checks off and saved, and nothing reminds the player (the owner’s app trim cut the monthly reminder; code health AP-08, AP-14)', async () => {

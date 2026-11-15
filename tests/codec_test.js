@@ -7,8 +7,15 @@ const fs = require('fs'), path = require('path');
 const { execFileSync } = require('child_process');
 const { encodeWithLua, render } = require('./helpers/strip-render.js');
 
-try { execFileSync('python3', ['--version'], { stdio: 'ignore' }); }
-catch { console.log('SKIP Codec.lua round-trip: python3 is required.'); process.exit(0); }
+const candidates = process.platform === 'win32'
+  ? [['py', ['-3']], ['python', []], ['python3', []]]
+  : [['python3', []], ['python', []]];
+const python = candidates.find(([cmd, args]) => {
+  try { execFileSync(cmd, [...args, '--version'], { stdio: 'ignore' }); return true; }
+  catch { return false; }
+});
+if (!python) { console.log('SKIP Codec.lua round-trip: Python 3 is required.'); process.exit(0); }
+const [pythonCmd, pythonArgs] = python;
 
 const CAPTURE_X11 = path.join(__dirname, '..', 'bridge', 'capture_x11.py');
 const TMP = path.join(__dirname, 'tmp');
@@ -16,7 +23,7 @@ const CELLS = 200, MAXROWS = 48, CELL = 4;
 fs.mkdirSync(TMP, { recursive: true });
 
 function decode(file) {
-  const out = execFileSync('python3', [CAPTURE_X11, '--test-image', file], { encoding: 'utf8' });
+  const out = execFileSync(pythonCmd, [...pythonArgs, CAPTURE_X11, '--test-image', file], { encoding: 'utf8' });
   return JSON.parse(out.trim().split('\n').pop());
 }
 

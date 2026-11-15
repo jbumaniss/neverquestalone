@@ -13,6 +13,7 @@ Integrations.lua
 LinkContext.lua
 DungeonContext.lua
 GameContext.lua
+CharacterSkills.lua
 Transport.lua
 Chats.lua
 Notify.lua

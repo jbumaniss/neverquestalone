@@ -104,6 +104,18 @@ test('index.html: a CSP meta with no inline script, no remote anything, and no i
   }
 });
 
+test('packaged self-test trusts exactly the local scripts listed in index.html', () => {
+  const html = read(path.join(R, 'index.html'));
+  const main = read(path.join(APP, 'main.mjs'));
+  const scripts = [...html.matchAll(/<script src="([a-z]+\.js)"><\/script>/g)].map(m => m[1]);
+  const allowlist = /const trustedScripts = \[([^\]]+)\];/.exec(main);
+  assert.ok(allowlist, 'self-test must declare its trusted renderer scripts');
+  assert.deepEqual([...allowlist[1].matchAll(/'([^']+)'/g)].map(m => m[1]), scripts);
+  assert.match(main, /scripts\.length !== trustedScripts\.length/);
+  assert.match(main, /scripts\.some\(\(src, i\) => src !== trustedScripts\[i\]\)/);
+  assert.doesNotMatch(main, /document\.scripts\.length\s*-\s*\d+/, 'a fixed script count hides new scripts and rejects legitimate ones');
+});
+
 test('main.mjs hardens the window: isolation, sandbox, no Node, no spellcheck, no new windows, no navigation', () => {
   const src = code(read(path.join(APP, 'main.mjs')));
   for (const re of [

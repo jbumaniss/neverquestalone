@@ -20,7 +20,11 @@ function D.Lines()
 		lines[#lines + 1] = "Instance: " .. label .. " (" .. tostring(typeName) .. ")"
 		if type(difficulty) == "number" and difficulty > 0 then lines[#lines + 1] = "Instance difficulty id: " .. ns.Int(difficulty) end
 	end
-	local members = call(GetNumGroupMembers) or call(GetNumPartyMembers)
+	local members = call(GetNumGroupMembers)
+	if type(members) ~= "number" or members == 0 then
+		local party = call(GetNumPartyMembers)
+		if type(party) == "number" and party > 0 then members = party + 1 end
+	end
 	if type(members) == "number" and members > 0 then
 		lines[#lines + 1] = "Group members: " .. ns.Int(members)
 		local role = call(UnitGroupRolesAssigned, "player")

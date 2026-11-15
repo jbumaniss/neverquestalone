@@ -1276,7 +1276,12 @@
   var PAGES = {};
   var renderToken = 0;
   function go(page, after) {
-    if (S.page === 'voice' && page !== 'voice') { window.BonesVoice?.stop(); window.BonesVoice?.cancelAudio(); B.voiceArm({ enabled: false }); if (S.voiceTimer) clearInterval(S.voiceTimer); S.voiceTimer = null; }
+    if (S.page === 'voice' && page !== 'voice') {
+      window.BonesVoice?.stop(); window.BonesVoice?.cancelAudio(); B.voiceArm({ enabled: false });
+      if (S.voiceSettings) S.voiceSettings.listening = false;
+      if (S.voiceTimer) clearInterval(S.voiceTimer);
+      S.voiceTimer = null;
+    }
     if (page === 'general') page = 'settings';
     // The app trim: Updates is part of About, Memory's two actions are in Settings' Show more.
     if (page === 'updates') page = 'about';

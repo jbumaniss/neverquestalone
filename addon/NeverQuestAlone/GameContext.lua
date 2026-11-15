@@ -7,11 +7,12 @@ local collectors, names = {}, {}
 -- Each read-only capability owns its own collector. Priority determines which
 -- lines survive the context byte budget; existing context sections keep their
 -- original order and the complete quest-id line is appended separately.
-function G.Register(name, priority, collect)
+function G.Register(name, priority, collect, relevant)
 	if type(name) ~= "string" or name == "" or names[name]
-		or type(priority) ~= "number" or type(collect) ~= "function" then return false end
+		or type(priority) ~= "number" or type(collect) ~= "function"
+		or (relevant ~= nil and type(relevant) ~= "function") then return false end
 	names[name] = true
-	collectors[#collectors + 1] = { name = name, priority = priority, read = collect }
+	collectors[#collectors + 1] = { name = name, priority = priority, read = collect, relevant = relevant }
 	table.sort(collectors, function(a, b)
 		if a.priority == b.priority then return a.name < b.name end
 		return a.priority < b.priority
@@ -163,14 +164,17 @@ local function fit(lines, questLine)
 	return s ~= "" and (s .. "\n" .. questLine) or questLine
 end
 
-function G.Build(Try, Money, Professions)
+function G.Build(Try, Money, Professions, question)
 	local lines = {}
 	for _, collector in ipairs(collectors) do
+		local relevant = not collector.relevant or (type(question) == "string" and ns.Try(collector.relevant, question:lower()) == true)
 		-- A missing/unsupported API or a failing optional adapter must not prevent
 		-- a player from sending their message or their complete quest list.
-		local before = #lines
-		local ok = pcall(collector.read, lines, Try, Money, Professions)
-		if not ok then while #lines > before do table.remove(lines) end end
+		if relevant then
+			local before = #lines
+			local ok = pcall(collector.read, lines, Try, Money, Professions, question)
+			if not ok then while #lines > before do table.remove(lines) end end
+		end
 	end
 	return fit(lines, questLog())
 end

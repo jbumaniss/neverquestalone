@@ -13,6 +13,16 @@ Integrations.lua
 LinkContext.lua
 DungeonContext.lua
 GameContext.lua
+ContextFacts.lua
+InventoryContext.lua
+AbilitiesContext.lua
+ReputationContext.lua
+GroupCombatContext.lua
+EquipmentContext.lua
+MovementContext.lua
+ServicesContext.lua
+CollectionsContext.lua
+AuctionContext.lua
 UnitStatus.lua
 CharacterSkills.lua
 ItemContext.lua

@@ -19,19 +19,32 @@ An absent field in an AI snapshot means **not received**. It never proves that t
        if type(value) == "number" then
            lines[#lines + 1] = "Example: " .. value
        end
-   end)
+   end, ns.ContextFacts.Relevant({ "example", "related question" }))
    ```
 
 4. Test supported values, unavailable APIs and restricted/secret values using `tests/helpers/nqa-vm.js`.
 
-Collectors execute in ascending priority; ties sort by name. Duplicate names are rejected. One failing collector does not prevent subsequent collectors or the quest log from being gathered. The original collectors retain priorities 10–70 and ordering. Optional lines at the end may be omitted by the 900-byte context limit. A collector must not write to the game, use protected actions or assume a third-party addon exists.
+Collectors execute in ascending priority; ties sort by name. Duplicate names are rejected. One failing collector does not prevent subsequent collectors or the quest log from being gathered. The original collectors retain priorities 10–70 and ordering. Relevant-question collectors run only when their match function returns true. Optional lines may be omitted by the 900-byte context limit. A collector must not write to the game, use protected actions or assume a third-party addon exists.
 
-## Next capability families
+Currently implemented question-triggered modules:
 
-- Bag item counts / inventory: a bounded, explicit-on-request report; avoid sending full bags on every message.
-- Learned abilities and cooldowns: version-specific read-only APIs, only the subset relevant to a question.
-- Reputation, groups and combat: separate collectors with privacy and combat/secret-value guards.
-- Auctionator and Questie: reuse the existing optional integration adapters; distinguish unavailable data from zero values.
-- Equipment names and stats: existing `ItemContext.lua` already expands linked item tooltips; validate cached item availability before adding bulk descriptions.
+- `InventoryContext`: bag IDs, counts and cached names (at most 10 types shown).
+- `AbilitiesContext`: a spellbook summary, active cooldowns and spent talent ranks.
+- `ReputationContext`: known faction standings.
+- `GroupCombatContext`: group composition without other players' names, buffs and debuffs.
+- `EquipmentContext`: worn item IDs, names, item levels and optional stats.
+- `MovementContext`: speed, facing and travel state when readable.
+- `ServicesContext`: data from *currently open* bank, mail and merchant interfaces; no remote access.
+- `CollectionsContext`: supported mount/pet/achievement counts.
+- `AuctionContext`: a locally indexed Auctionator price for a question naming an item ID.
+
+None of these modules automate gameplay. A missing line means the collector was not triggered, the API returned no usable data, or the byte budget excluded it; it never means the character has zero items/abilities/reputation.
+
+## Remaining transport limitations
+
+- Large inventories and complete spellbooks require chunked, versioned transport when the question needs more than the 900-byte context.
+- A journal or add-on feature absent in the installed client has no replacement or inferred zero value.
+- Auctionator price lookup currently requires an item ID; it is not a live auction search.
+- Persistent memory and speech playback are desktop features and must be verified separately from addon collectors.
 
 For larger fields, design a separate versioned, bounded on-demand message and bridge validator with explicit permission, rather than silently increasing `CONTEXT_MAX` or the companion-state limits. Keep each API family, validator and test independent.

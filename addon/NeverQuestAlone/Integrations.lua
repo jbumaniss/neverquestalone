@@ -22,6 +22,17 @@ function I.QuestieReady()
 	return addon ~= nil and type(addon.API) == "table" and addon.API.isReady == true
 end
 
+-- Questie's documented public API can identify quest-objective NPCs. The texture itself
+-- is never passed to the AI, and absent API support simply means no extra context.
+function I.QuestieTargetObjective(guid)
+	if type(guid) ~= "string" or guid == "" or not I.QuestieReady() then return false end
+	local addon = Public("Questie")
+	local f = addon and addon.API and addon.API.GetQuestObjectiveIconForUnit
+	if type(f) ~= "function" then return false end
+	local ok, icon = pcall(f, guid)
+	return ok and type(icon) == "string" and icon ~= ""
+end
+
 -- Last recorded auction scan, not a live price. Returns nil for missing data.
 -- The supported Auctionator API returns copper, or nil for an unknown item.
 function I.AuctionPrice(itemId)

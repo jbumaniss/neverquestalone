@@ -19,6 +19,9 @@ test('Questie is available only after its public API signals readiness', () => {
   assert.equal(vm.bool('NS.Integrations.QuestieReady()'), false);
   vm.run('Questie.API.isReady = true');
   assert.equal(vm.bool('NS.Integrations.QuestieReady()'), true);
+  vm.run('Questie.API.GetQuestObjectiveIconForUnit = function(guid) return guid == "Creature-123" and "icon" or nil end');
+  assert.equal(vm.bool('NS.Integrations.QuestieTargetObjective("Creature-123")'), true);
+  assert.equal(vm.bool('NS.Integrations.QuestieTargetObjective("Player-123")'), false);
 });
 
 test('Auctionator uses only its public price API, and does not expose bad values', () => {
@@ -52,4 +55,22 @@ test('link expansion preserves linked names, de-duplicates tooltips, and leaves 
   assert.match(vm.evaluate('expanded'), /\[Equipped\] Sword/);
   assert.equal(vm.evaluate('plain'), 'No item');
   assert.equal(vm.num('plainCount'), 0);
+});
+
+test('dungeon context is read only and degrades gracefully outside an instance', () => {
+  const vm = newVM();
+  vm.run(`IsInInstance = function() return true, "party" end
+    GetInstanceInfo = function() return "Shadowfang Keep", "party", 1 end
+    GetNumGroupMembers = function() return 5 end
+    UnitGroupRolesAssigned = function() return "TANK" end
+    UnitIsPlayer = function() return false end
+    UnitName = function() return "Commander Springvale" end
+    UnitLevel = function() return 26 end
+    UnitClassification = function() return "elite" end
+    dungeonText = table.concat(NS.DungeonContext.Lines(), " | ")`);
+  const d = vm.evaluate('dungeonText');
+  assert.match(d, /Shadowfang Keep/);
+  assert.match(d, /Group members: 5/);
+  assert.match(d, /My group role: TANK/);
+  assert.match(d, /Commander Springvale/);
 });

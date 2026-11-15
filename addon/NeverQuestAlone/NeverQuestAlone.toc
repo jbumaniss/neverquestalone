@@ -11,6 +11,7 @@ Inbox.lua
 Store.lua
 Integrations.lua
 LinkContext.lua
+DungeonContext.lua
 Transport.lua
 Chats.lua
 Notify.lua

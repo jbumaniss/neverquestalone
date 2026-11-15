@@ -882,6 +882,17 @@ function C.GameContext()
 		local where = (mapName and mapName ~= zone) and (" on " .. mapName) or ""
 		table.insert(lines, string.format("Position: %.1f, %.1f%s%s", x * 100, y * 100, where, mapId and (" (map " .. mapId .. ")") or ""))
 	end
+	-- Public Questie objective marker: advisory context only, no quest automation.
+	if ns.Integrations and not Try(UnitIsPlayer, "target") then
+		local guid = Try(UnitGUID, "target")
+		if ns.Integrations.QuestieTargetObjective(guid) then
+			local targetName = ns.Readable(Try(UnitName, "target"))
+			if targetName then table.insert(lines, "Questie: target " .. targetName .. " is marked as a quest objective") end
+		end
+	end
+	if ns.DungeonContext then
+		for _, line in ipairs(ns.DungeonContext.Lines()) do table.insert(lines, line) end
+	end
 
 	local progress = {}
 	local copper = Try(GetMoney)

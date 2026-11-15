@@ -1085,6 +1085,19 @@ function C.ExpandLinks(text, level)
 		local block = body ~= "" and (head .. "\n  " .. body) or head
 		if #block > LINK_BYTES_MAX then block = ns.Utf8Cut(block, LINK_BYTES_MAX) .. "..." end
 		table.insert(blocks, block)
+		-- Optional Auctionator data is read-only and labeled as a past scan.
+		-- Never guess a live auction price when the integration is unavailable.
+		local itemId = tonumber(l.payload:match("^item:(%d+)"))
+		local integrations = ns.Integrations
+		if itemId and integrations then
+			local price = integrations.AuctionPrice(itemId)
+			if price then
+				local age = integrations.AuctionPriceAge(itemId)
+				local text = "[Auctionator last scan] " .. ns.Int(price) .. " copper"
+				if age then text = text .. " (" .. ns.Int(age) .. " day(s) old)" end
+				table.insert(blocks, text)
+			end
+		end
 		-- The compare is extra: if the client answers something unexpected, the message goes without it.
 		local ok, eqs = pcall(EquippedBlocks, l.payload, level)
 		for _, eq in ipairs(ok and eqs or {}) do table.insert(blocks, eq) end

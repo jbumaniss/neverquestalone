@@ -202,7 +202,10 @@ test('the window (SY-102-5): a retiring model is a notice on Home with the day, 
   assert.match(fn, /dataLine\(id, v, \['model', 'date', 'to', 'dayCost'\]\)/, 'names, the day and the price are data, as Your AI\'s rows are');
   assert.doesNotMatch(fn, /setTimeout|setInterval|requestAnimationFrame/);
   // One pick: Your AI's model rows and the notice's Use go through chooseModel, then Your AI shows the result.
-  assert.match(app, /function chooseModel\(cur, mid\) \{\n    var mm = modelById\(cur\.id, mid\) \|\| \{\};\n    return B\.choose\(\{ provider: cur\.id, model: mid, effort: mm\.effort \? \(nearestLevel\(levelsOf\(mm\), cur\.effort \|\| 'low'\) \|\| 'low'\) : null \}\);/);
+  assert.match(app, /function chooseModel\(cur, mid\) \{\n    var mm = modelById\(cur\.id, mid\) \|\| \{\};/);
+  assert.match(app, /if \(cur\.id === 'openai' && cur\.auth === 'oauth'\) return B\.chatgptUse\(\{/);
+  assert.match(app, /model: mid, \.\.\.\(mm\.effort \? \{ effort: nearestLevel\(levelsOf\(mm\), cur\.effort \|\| 'medium'\) \} : \{\}\)/);
+  assert.match(app, /return B\.choose\(\{ provider: cur\.id, model: mid, effort: mm\.effort \? \(nearestLevel\(levelsOf\(mm\), cur\.effort \|\| 'low'\) \|\| 'low'\) : null \}\);/);
   assert.equal((app.match(/B\.choose\(\{ provider: cur\.id, model: mid,/g) ?? []).length, 1, 'one model pick in the window');
   assert.match(app, /var pick = function \(mid\) \{\n          chooseModel\(cur, mid\)\.then/);
   assert.match(app, /function useModel\(cur, mid\) \{\n    return chooseModel\(cur, mid\)\.then\(function \(r\) \{\n      S\.ya = \{ view: 'main', modelOpen: true, chosen: stamp\(r \|\| \{ ok: false \}\) \};/);

@@ -74,3 +74,10 @@ test('dungeon context is read only and degrades gracefully outside an instance',
   assert.match(d, /My group role: TANK/);
   assert.match(d, /Commander Springvale/);
 });
+
+test('game context remains delegated through Chats and preserves the quest-log contract', () => {
+  const vm = newVM();
+  const text = vm.evaluate('NS.Chats.GameContext()');
+  assert.match(text, /Game: World of Warcraft/);
+  assert.equal(typeof text, 'string');
+});

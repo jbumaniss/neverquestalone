@@ -12,6 +12,7 @@ Store.lua
 Integrations.lua
 LinkContext.lua
 DungeonContext.lua
+GameContext.lua
 Transport.lua
 Chats.lua
 Notify.lua

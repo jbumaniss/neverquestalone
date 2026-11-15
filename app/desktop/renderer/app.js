@@ -3658,7 +3658,9 @@
             rerender(false, function () { focusEl(document.getElementById('memory-notes-editor')); });
           });
         };
-        var save = busyBtn('Save notes', function () { return saveEdited(editor.value); }, 'btn btn-primary', { fk: 'save-memory-notes' });
+        // A status redraw can replace the button handler while retaining the
+        // visible textarea. Always save the latest live draft, not a stale node.
+        var save = busyBtn('Save notes', function () { return saveEdited(S.memoryNotesDrafts[selected]); }, 'btn btn-primary', { fk: 'save-memory-notes' });
         var clear = busyBtn('Clear notes', function () { return saveEdited(''); }, 'btn btn-quiet', { fk: 'clear-memory-notes' });
         return pageNode('page-memory-notes', subTop(), [
           title('Character memories'),
@@ -3676,15 +3678,19 @@
     var v = S.voiceSettings;
     if (!S.voiceTimer) {
       S.voiceTimer = setInterval(function () {
-        if (S.page !== 'voice') return;
-        if (!v.chatId) return;
-        var requestedChat = v.chatId;
-        B.voiceReplies({ after: S.voiceSeq || 0, chatId: requestedChat }).then(function (r) {
-          if (requestedChat !== v.chatId) return;
-          if (isErr(r) || !Array.isArray(r.replies)) return;
-          var replies = r.replies;
-          replies.forEach(function (a) {
-            if (a.seq > (S.voiceSeq || 0)) { S.voiceSeq = a.seq; voice?.speak(a.text); }
+        if (S.page !== 'voice' || !v.output) return;
+        B.voiceCurrent({}).then(function (current) {
+          if (!v.output || isErr(current)) return;
+          if (v.chatId !== current.chatId) {
+            v.chatId = current.chatId;
+            S.voiceSeq = current.after || 0; // On a new chat, never replay historical replies.
+            return;
+          }
+          return B.voiceReplies({ after: S.voiceSeq || 0, chatId: current.chatId }).then(function (r) {
+            if (!v.output || current.chatId !== v.chatId || isErr(r) || !Array.isArray(r.replies)) return;
+            r.replies.forEach(function (a) {
+              if (a.seq > (S.voiceSeq || 0)) { S.voiceSeq = a.seq; voice?.speak(a.text); }
+            });
           });
         }).catch(function () {});
       }, 1500);
@@ -3713,7 +3719,13 @@
       });
     }, 'btn btn-primary', { fk: 'voice-microphone' });
     var spoken = switchBtn('sw-voice-output', 'Speak replies aloud', v.output, function (enabled) {
-      v.output = enabled; voice.setOutput(enabled); rerender(false);
+      v.output = enabled; voice.setOutput(enabled);
+      if (enabled) B.voiceCurrent({}).then(function (current) {
+        if (!v.output || isErr(current)) return;
+        v.chatId = current.chatId;
+        S.voiceSeq = current.after || 0;
+      }).catch(function () {});
+      rerender(false);
     });
     var hotkey = switchBtn('sw-voice-hotkey', 'Enable Ctrl+Shift+Space while playing', v.hotkey, function (enabled) {
       B.voiceHotkey({ enabled: enabled }).then(function (r) {
@@ -3729,6 +3741,12 @@
       group(null, [microphone, stackRow('voice-output', 'Speak AI replies', [], spoken),
         stackRow('voice-hotkey', 'Enable Ctrl+Shift+Space while playing', [para('Optional. The shortcut is released when the app window closes.', 'set-sub')], hotkey), input,
         busyBtn('Send text', function () { var text = input.value.trim(); return text ? Promise.resolve(sendText(text)) : Promise.resolve(); }, 'btn btn-quiet', { fk: 'voice-send' }),
+        busyBtn('Test speaker', function () {
+          if (!v.output) { v.error = 'Enable Speak AI replies first.'; rerender(false); return Promise.resolve(); }
+          var played = voice?.speak('NeverQuestAlone speech test. You should hear this through your Windows speakers.');
+          if (!played) { v.error = 'Speech output is unavailable on this computer.'; rerender(false); }
+          return Promise.resolve();
+        }, 'btn btn-quiet', { fk: 'voice-test' }),
         v.lastText ? para('Last sent: ' + v.lastText, 'set-sub') : null,
         v.error ? para(v.error, 'set-sub') : null,
         !voice?.available() ? para('Speech recognition is unavailable here; you can still type.', 'set-sub') : null,

@@ -52,6 +52,7 @@ import { createQuitFlow } from './src/quit.mjs';
 import { createLoginItem } from './src/login-item.mjs';
 import { uninstallTargets, removeTargets, readCaptureBundleId, tccBundleIds } from './src/uninstall.mjs';
 import { createAppState } from './src/app-state.mjs';
+import { createVoiceOutput } from './src/voice-output.mjs';
 import { collectNotices } from './src/notices.mjs';
 import { withNotice } from './src/model-notice.mjs';
 import { trayLine, createNotifier, needsPlayer } from './src/status-text.mjs';
@@ -213,6 +214,8 @@ let loaded = { mode: 'none', reason: null };
 let win = null;
 let microphoneArmedUntil = 0;
 let voiceHotkeyEnabled = false;
+const voiceOutput = createVoiceOutput();
+app.on('will-quit', () => voiceOutput.stop());
 const VOICE_HOTKEY = 'Control+Shift+Space';
 function setVoiceHotkey(enabled) {
   if (!enabled) {
@@ -762,6 +765,8 @@ async function start() {
       return { ok: true };
     },
     setVoiceHotkey,
+    voiceSpeak: text => voiceOutput.speak(text),
+    voiceStop: () => voiceOutput.stop(),
     platform: process.platform,
     confirm: confirmNative,
     links: { open: openLinkUrl },

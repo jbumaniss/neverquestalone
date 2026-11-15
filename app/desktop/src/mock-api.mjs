@@ -558,6 +558,7 @@ export function createMockApi({ now = Date.now, platform = process.platform, del
     },
     async voiceSend({ text }) { return typeof text === 'string' && text.trim() ? { ok: true, chatId: 'main' } : { ok: false, error: 'bad_input' }; },
     async voiceReplies() { return { ok: true, replies: [] }; },
+    async voiceCurrent() { return { ok: false, error: 'no_active_chat' }; },
     async voiceArm() { return { ok: true }; },
     async forgetMemory(char) { s.memoryChars = s.memoryChars.filter(c => c !== char); return { ok: true }; },
     async transcripts({ deleteAll } = {}) {

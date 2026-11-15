@@ -901,6 +901,10 @@ export const HANDLERS = {
     input: obj({ after: { type: 'integer', minimum: 0 }, chatId: { type: 'string', minLength: 1, maxLength: 64 } }, ['chatId']),
     run: (ctx, v) => ctx.api.voiceReplies(v),
   },
+  voiceCurrent: {
+    input: obj({}, []),
+    run: ctx => ctx.api.voiceCurrent(),
+  },
   voiceArm: {
     input: obj({ enabled: BOOL }, ['enabled']),
     run: (ctx, v) => ctx.armMicrophone?.(v.enabled) ?? { ok: false, error: 'unavailable' },
@@ -908,6 +912,14 @@ export const HANDLERS = {
   voiceHotkey: {
     input: obj({ enabled: BOOL }, ['enabled']),
     run: (ctx, v) => ctx.setVoiceHotkey?.(v.enabled) ?? { ok: false, error: 'unavailable' },
+  },
+  voiceSpeak: {
+    input: obj({ text: { type: 'string', minLength: 1, maxLength: 1000 } }, ['text']),
+    run: (ctx, v) => ctx.voiceSpeak?.(v.text) ?? { ok: false, error: 'unavailable' },
+  },
+  voiceStop: {
+    input: obj({}, []),
+    run: ctx => ctx.voiceStop?.() ?? { ok: false, error: 'unavailable' },
   },
   // One character ({char}), or every character the memory lists ({all: true}: Settings' Forget all,
   // one confirm for all of them, CL-words-76). The characters come from the bridge, never the page.

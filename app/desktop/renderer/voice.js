@@ -5,14 +5,20 @@
   var Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
   var active = null;
   var output = false;
+  var nativeWindows = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent || '');
 
   function stop() {
     if (active) { var r = active; active = null; try { r.abort(); } catch (_) {} }
   }
   function speak(text) {
-    if (!output || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return false;
+    if (!output) return false;
     var value = String(text || '').slice(0, 1000);
     if (!value) return false;
+    if (nativeWindows && window.nqa?.voiceSpeak) {
+      window.nqa.voiceSpeak({ text: value }).catch(function () {});
+      return true;
+    }
+    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return false;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(new window.SpeechSynthesisUtterance(value));
     return true;
@@ -22,10 +28,16 @@
     listening: function () { return !!active; },
     setOutput: function (enabled) {
       output = enabled === true;
-      if (!output && window.speechSynthesis) window.speechSynthesis.cancel();
+      if (!output) {
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
+        window.nqa?.voiceStop?.({}).catch(function () {});
+      }
     },
     stop: stop,
-    cancelAudio: function () { if (window.speechSynthesis) window.speechSynthesis.cancel(); },
+    cancelAudio: function () {
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      window.nqa?.voiceStop?.({}).catch(function () {});
+    },
     speak: speak,
     start: function (onResult, onError, onEnd) {
       stop();

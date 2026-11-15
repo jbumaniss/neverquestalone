@@ -1896,6 +1896,7 @@ export function createBridge(config, deps) {
     /** Typed desktop input, including opt-in dictation, through the normal guarded outbox. */
     sendDesktopMessage: desktopInput.send,
     voiceReplies: desktopInput.replies,
+    voiceCurrent: desktopInput.current,
     buildSlot,
     checkRuns,
     flushOutbox,

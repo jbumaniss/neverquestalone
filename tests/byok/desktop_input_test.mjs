@@ -11,6 +11,7 @@ test('desktop input uses current chat and existing guarded message handler', () 
     records: () => [{ t: 'reply', seq: 2, chat: 'new', text: 'Hello' }, { t: 'error', seq: 3, text: 'ignore' }],
   });
   const sentMessage = input.send('Go north');
+  assert.deepEqual(input.current(), { ok: true, chatId: 'new', after: 2 });
   assert.equal(sentMessage.chatId, 'new');
   assert.equal(sentMessage.after, 2);
   assert.equal(sent.length, 1);
@@ -25,5 +26,6 @@ test('desktop input uses current chat and existing guarded message handler', () 
 test('desktop input cannot send when no live game chat exists', () => {
   const input = createDesktopInput({ currentToken: () => null, tokenState: () => null, chats: () => [], acceptMessage: () => { throw new Error('sent'); }, records: () => [] });
   assert.equal(input.send('Hello').error, 'no_active_chat');
+  assert.deepEqual(input.current(), { ok: false, error: 'no_active_chat' });
   assert.deepEqual(input.replies(0, 'none'), []);
 });

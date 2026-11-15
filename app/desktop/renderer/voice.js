@@ -1,5 +1,5 @@
-// Opt-in desktop voice I/O. No background microphone, audio files or third-party STT endpoint.
-// The browser's speech service may be unavailable on a Windows installation; fail closed.
+// Opt-in desktop voice I/O. No background microphone or persisted audio.
+// Chromium's speech API can use an OS/browser service; it may be unavailable on Windows.
 (function () {
   'use strict';
   var Speech = window.SpeechRecognition || window.webkitSpeechRecognition;

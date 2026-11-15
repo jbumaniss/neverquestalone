@@ -3651,18 +3651,19 @@
         var editor = h('textarea', { id: 'memory-notes-editor', class: 'input', value: S.memoryNotesDrafts[selected], maxlength: 4000, rows: 7, 'aria-label': 'Character notes', spellcheck: true,
           onInput: function (e) { S.memoryNotesDrafts[selected] = e.target.value; },
         });
-        var save = busyBtn('Save notes', function () {
-          var draft = editor.value;
+        var saveEdited = function (draft) {
           return B.saveMemoryNotes({ char: selected, text: draft }).then(function (r) {
-            if (!isErr(r) && S.memoryNotesDrafts[selected] === draft) delete S.memoryNotesDrafts[selected];
+            if (!isErr(r)) S.memoryNotesDrafts[selected] = draft;
             S.settingsResult.memoryNotes = stamp(r || { ok: false });
             rerender(false, function () { focusEl(document.getElementById('memory-notes-editor')); });
           });
-        }, 'btn btn-primary', { fk: 'save-memory-notes' });
+        };
+        var save = busyBtn('Save notes', function () { return saveEdited(editor.value); }, 'btn btn-primary', { fk: 'save-memory-notes' });
+        var clear = busyBtn('Clear notes', function () { return saveEdited(''); }, 'btn btn-quiet', { fk: 'clear-memory-notes' });
         return pageNode('page-memory-notes', subTop(), [
           title('Character memories'),
           para('Saved locally, used as background in future chats. Do not store passwords or private information.', 'set-sub'),
-          group(null, [picker, editor, save, settingsLine('memoryNotes', 'Notes saved')], 'memory-notes'),
+          group(null, [picker, editor, save, clear, settingsLine('memoryNotes', 'Notes saved')], 'memory-notes'),
           m && m.digest ? group('From the game', [para(m.digest, 'set-sub')], 'memory-facts') : null,
         ]);
       });

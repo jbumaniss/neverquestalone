@@ -10,6 +10,7 @@ Codec.lua
 Inbox.lua
 Store.lua
 Integrations.lua
+LinkContext.lua
 Transport.lua
 Chats.lua
 Notify.lua

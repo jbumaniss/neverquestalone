@@ -19,7 +19,6 @@ ns.Chats = C
 local R = ns.R
 
 local LINK_LINES_MAX = 30 -- tooltip lines kept per link (upstream)
-local LINK_BYTES_MAX = 900 -- bytes kept per link (upstream)
 local AGENT_FALLBACK = { main = "NeverQuestAlone" }
 
 ---------------------------------------------------------------------------
@@ -1064,45 +1063,7 @@ end
 -- equipped part to fit (see EquippedBlocks). Returns the new text and the
 -- number of links found.
 function C.ExpandLinks(text, level)
-	level = level or 0
-	local links, seen = {}, {}
-	local function Take(payload, name)
-		if not seen[payload] then
-			seen[payload] = true
-			table.insert(links, { payload = payload, name = name })
-		end
-		return "[" .. name .. "]"
-	end
-	-- Coloured links first (|cAARRGGBB or the client's |cnIQ1: colour, then |H...|h[Name]|h|r), then bare ones.
-	local out = text:gsub("|c%x%x%x%x%x%x%x%x|H([^|]+)|h%[([^%]]*)%]|h|r", Take)
-	out = out:gsub("|cn[^:|]*:|H([^|]+)|h%[([^%]]*)%]|h|r", Take)
-	out = out:gsub("|H([^|]+)|h%[([^%]]*)%]|h", Take)
-	if #links == 0 then return text, 0 end
-	local blocks = {}
-	for _, l in ipairs(links) do
-		local head = "[" .. l.name .. "] " .. DescribeLink(l.payload)
-		local body = table.concat(TooltipLines(l.payload), "\n  ")
-		local block = body ~= "" and (head .. "\n  " .. body) or head
-		if #block > LINK_BYTES_MAX then block = ns.Utf8Cut(block, LINK_BYTES_MAX) .. "..." end
-		table.insert(blocks, block)
-		-- Optional Auctionator data is read-only and labeled as a past scan.
-		-- Never guess a live auction price when the integration is unavailable.
-		local itemId = tonumber(l.payload:match("^item:(%d+)"))
-		local integrations = ns.Integrations
-		if itemId and integrations then
-			local price = integrations.AuctionPrice(itemId)
-			if price then
-				local age = integrations.AuctionPriceAge(itemId)
-				local text = "[Auctionator last scan] " .. ns.Int(price) .. " copper"
-				if age then text = text .. " (" .. ns.Int(age) .. " day(s) old)" end
-				table.insert(blocks, text)
-			end
-		end
-		-- The compare is extra: if the client answers something unexpected, the message goes without it.
-		local ok, eqs = pcall(EquippedBlocks, l.payload, level)
-		for _, eq in ipairs(ok and eqs or {}) do table.insert(blocks, eq) end
-	end
-	return out .. "\n\n--- Linked from the game ---\n" .. table.concat(blocks, "\n"), #links
+	return ns.LinkContext.Expand(text, level or 0, DescribeLink, TooltipLines, EquippedBlocks)
 end
 
 

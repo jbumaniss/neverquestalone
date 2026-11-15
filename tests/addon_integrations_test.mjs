@@ -38,3 +38,18 @@ test('Auctionator uses only its public price API, and does not expose bad values
   assert.equal(vm.evaluate('NS.Integrations.AuctionPrice(43)'), null);
   assert.equal(vm.evaluate('NS.Integrations.AuctionPrice("42")'), null);
 });
+
+test('link expansion preserves linked names, de-duplicates tooltips, and leaves plain text unchanged', () => {
+  const vm = newVM();
+  vm.run(`local expand = NS.LinkContext.Expand
+    local describe = function(link) return "item " .. link end
+    local tooltip = function() return { "Bound" } end
+    local equipped = function() return { "[Equipped] Sword" } end
+    expanded, count = expand("Compare |Hitem:42|h[Sword]|h and |Hitem:42|h[Sword]|h", 0, describe, tooltip, equipped)
+    plain, plainCount = expand("No item", 0, describe, tooltip, equipped)`);
+  assert.equal(vm.num('count'), 1);
+  assert.match(vm.evaluate('expanded'), /Compare \[Sword\] and \[Sword\]/);
+  assert.match(vm.evaluate('expanded'), /\[Equipped\] Sword/);
+  assert.equal(vm.evaluate('plain'), 'No item');
+  assert.equal(vm.num('plainCount'), 0);
+});

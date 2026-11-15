@@ -16,7 +16,7 @@ const CALLS = [
   'stageKey', 'dropStagedKey', 'testKey', 'deleteKey', 'connectCustom', 'choose',
   'caps', 'setCaps', 'privacy', 'setPrivacy',
   'usage', 'connections', 'lastRequest',
-  'memory', 'forgetMemory', 'transcripts', 'setRetention', 'regenerateSafetyId',
+  'memory', 'saveMemoryNotes', 'forgetMemory', 'transcripts', 'setRetention', 'regenerateSafetyId',
   'findWow', 'chooseWowFolder', 'installAddon', 'addonPermissions', 'tightenAddonPermissions', 'copyPermissionsCommand',
   'copyDiagnostics', 'copyCommand', 'openLink',
   'relaunch', 'quitApp', 'resumeSending', 'setPaused',

@@ -889,6 +889,10 @@ export const HANDLERS = {
     input: obj({ char: { type: 'string', maxLength: 64, pattern: PATTERNS.character } }, [], { optional: true }),
     run: (ctx, v) => ctx.api.memory(v?.char),
   },
+  saveMemoryNotes: {
+    input: obj({ char: { type: 'string', maxLength: 64, pattern: PATTERNS.character }, text: { type: 'string', maxLength: 4000 } }, ['char', 'text']),
+    run: (ctx, v) => ctx.api.saveMemoryNotes(v),
+  },
   // One character ({char}), or every character the memory lists ({all: true}: Settings' Forget all,
   // one confirm for all of them, CL-words-76). The characters come from the bridge, never the page.
   forgetMemory: {

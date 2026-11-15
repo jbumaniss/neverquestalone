@@ -543,13 +543,18 @@ export function createMockApi({ now = Date.now, platform = process.platform, del
       if (!char) return { chars: [...s.memoryChars] };
       if (!s.memoryChars.includes(char)) return { ok: false, error: 'not_found' };
       return {
-        char, updated: now() - 2 * 3600e3,
+        char, updated: now() - 2 * 3600e3, notesText: s.memoryNotes?.[char] ?? '',
         digest: 'Level 6 Tauren Warrior. Prefers short answers. Working through Mulgore; skipped the Venture Co. chain.',
         notes: [
           { at: now() - 2 * 3600e3, text: 'Finished "The Hunt Begins".' },
           { at: now() - 26 * 3600e3, text: 'Player asked: <script>alert("not markup")</script> — shown as text.' },
         ],
       };
+    },
+    async saveMemoryNotes({ char, text }) {
+      if (!s.memoryChars.includes(char) || typeof text !== 'string' || text.length > 4000) return { ok: false, error: 'bad_input' };
+      (s.memoryNotes || (s.memoryNotes = {}))[char] = text;
+      return { ok: true };
     },
     async forgetMemory(char) { s.memoryChars = s.memoryChars.filter(c => c !== char); return { ok: true }; },
     async transcripts({ deleteAll } = {}) {

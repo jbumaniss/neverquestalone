@@ -1822,7 +1822,7 @@ export function createLocalBackend(handlers = {}, opts = {}) {
       if (!c) return { ok: false, error: 'no character' };
       const dir = memory.dir(c);
       const files = [];
-      for (const name of Object.values(MEMORY_FILES)) {
+      for (const name of [...Object.values(MEMORY_FILES), 'notes.md']) {
         try {
           const st = fs.statSync(path.join(dir, name));
           if (st.isFile()) files.push({ name, bytes: st.size, modifiedAt: Math.floor(st.mtimeMs) });
@@ -1830,7 +1830,14 @@ export function createLocalBackend(handlers = {}, opts = {}) {
       }
       let digest = null;
       try { digest = keyFreeDigest(memory.digest(c, { identity: settings.identity })); } catch (e) { log('byok-memory-error', { error: short(e) }); }
-      return { ok: true, char: c, key: charKey(c), dir, digest, text: digestText(digest), files };
+      return { ok: true, char: c, key: charKey(c), dir, digest, text: digestText(digest), notesText: memory.readNotes(c), files };
+    },
+    /** Player-authored continuity, distinct from facts written by the addon. */
+    saveMemoryNotes(char, text) {
+      const c = charArg(char);
+      if (!c || typeof text !== 'string' || text.length > 4_000) return { ok: false, error: 'bad_input' };
+      memory.saveNotes(c, text);
+      return { ok: true };
     },
     /** Delete one character's memory folder (the app's "delete"): {ok, removed}. */
     forgetMemory(char) {

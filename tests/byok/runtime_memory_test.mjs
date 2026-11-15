@@ -32,6 +32,21 @@ test('memory: nothing yet is null', () => {
   assert.equal(digestTokens(null), 0);
 });
 
+test('memory: personal notes survive reloads and logbook updates without changing generated facts', () => {
+  const dataDir = newData();
+  const mem = createMemory(dataDir);
+  mem.saveNotes(CHAR, '## My build\n- Prefer stealth\n- Save gold for mount');
+  assert.equal(createMemory(dataDir).readNotes(CHAR), '## My build\n- Prefer stealth\n- Save gold for mount');
+  assert.ok(digest(CHAR, { dataDir }).notes.includes('Prefer stealth'));
+  assert.equal(applyLogbook(state(1, 6), { dataDir }).ok, true);
+  assert.equal(createMemory(dataDir).readNotes(CHAR).includes('Save gold'), true);
+  assert.match(fs.readFileSync(path.join(memoryDir(dataDir, CHAR), FILES.character), 'utf8'), /nqa:facts:start/);
+  assert.throws(() => mem.saveNotes(CHAR, 'x'.repeat(4_001)), /invalid memory notes/);
+  assert.equal(mem.readNotes(CHAR).includes('Prefer stealth'), true);
+  mem.forget(CHAR);
+  assert.equal(mem.readNotes(CHAR), '');
+});
+
 test('memory: a labeled digest of the logbook, the player\'s own notes included, identity off by default', () => {
   const dataDir = newData();
   assert.equal(applyLogbook(state(1, 6), { dataDir }).ok, true);

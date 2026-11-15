@@ -3597,6 +3597,7 @@
       var moreBox = !openMore ? null : h('div', { class: 'more', id: 'more-box', 'data-key': 'more', 'data-behind': 'click' },
         group(null, [
           stackRow('history-row', ST('historyLabel'), [settingsLine('history'), settingsLine('chats', ST('deletedLine'))], h('div', { class: 'row' }, keep, deleteChats)),
+          subRow('memory-notes-row', 'Character memories', 'memoryNotes'),
           forget || S.settingsResult.memory ? stackRow('memory-row', ST('memoryLabel'), [settingsLine('memory', ST('forgotLine'))], forget) : null,
           // The chat-frame echo: the desktop gates it (off by default: chat-logging addons keep the chat
           // frame), and the game's words send the player here (CL-words-73).
@@ -3621,6 +3622,37 @@
         h('div', { class: 'actions actions-quiet', 'data-key': 'more-toggle' }, toggleMore),
         moreBox,
       ]);
+    });
+  };
+
+  // Player-owned notes are separate from the logbook's generated facts. Keep drafts on the page
+  // until explicitly saved; never rewrite another character's memory or the game's facts.
+  PAGES.memoryNotes = function () {
+    return B.memory().then(function (result) {
+      var chars = Array.isArray(result && result.chars) ? result.chars : [];
+      var selected = S.memoryNotesCharacter && chars.indexOf(S.memoryNotesCharacter) >= 0 ? S.memoryNotesCharacter : chars[0];
+      if (!selected) return pageNode('page-memory-notes', subTop(), [title('Character memories'), para('Play a character once to start a local memory. Your own notes stay on this computer.', 'set-sub')]);
+      S.memoryNotesCharacter = selected;
+      return B.memory(selected).then(function (m) {
+        var saved = m && typeof m.notesText === 'string' ? m.notesText : '';
+        var picker = h('select', { class: 'select', id: 'memory-character', 'aria-label': 'Character', onChange: function (e) {
+          S.memoryNotesCharacter = e.target.value;
+          rerender(false);
+        } }, chars.map(function (c) { return h('option', { value: c, selected: c === selected, text: c }); }));
+        var editor = h('textarea', { id: 'memory-notes-editor', class: 'input', value: saved, maxlength: 4000, rows: 7, 'aria-label': 'Character notes', spellcheck: true });
+        var save = busyBtn('Save notes', function () {
+          return B.saveMemoryNotes({ char: selected, text: editor.value }).then(function (r) {
+            S.settingsResult.memoryNotes = stamp(r || { ok: false });
+            rerender(false, function () { focusEl(document.getElementById('memory-notes-editor')); });
+          });
+        }, 'btn btn-primary', { fk: 'save-memory-notes' });
+        return pageNode('page-memory-notes', subTop(), [
+          title('Character memories'),
+          para('Saved locally, used as background in future chats. Do not store passwords or private information.', 'set-sub'),
+          group(null, [picker, editor, save, settingsLine('memoryNotes', 'Notes saved')], 'memory-notes'),
+          m && m.digest ? group('From the game', [para(m.digest, 'set-sub')], 'memory-facts') : null,
+        ]);
+      });
     });
   };
 

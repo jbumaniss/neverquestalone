@@ -34,6 +34,8 @@ export const DIGEST_TOKENS = 400;
 // breaker's r2).
 export const QUEST_TOKENS = 640;
 const LINE = 200;
+const NOTES_FILE = 'notes.md';
+const NOTES_LIMIT = 4_000;
 
 /** A digest's size as it's sent: the block's encoding, where each `<` or `>` takes six characters. */
 export const digestTokens = d => (d ? estimateTokens(encodeData(d)) : 0);
@@ -98,7 +100,8 @@ export function digest(char, { dataDir, maxTokens = DIGEST_TOKENS, identity = fa
   const character = read(path.join(dir, FILES.character));
   const quests = read(path.join(dir, FILES.quests));
   const log = read(path.join(dir, FILES.log));
-  if (character === null && quests === null && log === null) return null;
+  const personalNotes = read(path.join(dir, NOTES_FILE));
+  if (character === null && quests === null && log === null && personalNotes === null) return null;
 
   const c = splitFacts(character);
   const q = splitFacts(quests);
@@ -107,7 +110,7 @@ export function digest(char, { dataDir, maxTokens = DIGEST_TOKENS, identity = fa
   if (updated) d.updated = updated[1];
   d.character = c.inside.split('\n').filter(l => /^\s*- /.test(l)).map(item).filter(Boolean);
   d.recent = (log ?? '').split('\n').filter(l => /^\s*- /.test(l)).map(item).filter(Boolean).slice(-recentMax);
-  d.notes = [...playerLines(c.outside), ...playerLines(q.outside)].slice(0, 12);
+  d.notes = [...playerLines(personalNotes ?? ''), ...playerLines(c.outside), ...playerLines(q.outside)].slice(0, 12);
   d.quests = withQuests ? q.inside.split('\n').filter(l => QUEST_ITEM.test(l)).map(item).filter(Boolean) : [];
   // The quests still in the log (the context's line): only those when it's the whole log, else those first.
   if (live && Array.isArray(live.ids) && d.quests.length) {
@@ -150,6 +153,29 @@ export function digest(char, { dataDir, maxTokens = DIGEST_TOKENS, identity = fa
   return Object.keys(out).length ? out : null;
 }
 
+/** Player-owned notes live separately from generated game facts. Never rewrite logbook files. */
+export function readNotes(dataDir, char) {
+  if (!dataDir || !char?.name) return '';
+  return read(path.join(memoryDir(dataDir, char), NOTES_FILE)) ?? '';
+}
+
+/** Replace personal notes atomically, without touching generated facts or other characters. */
+export function saveNotes(dataDir, char, value) {
+  if (!dataDir || !char?.name || typeof value !== 'string' || value.length > NOTES_LIMIT || value.includes('\0')) {
+    throw new TypeError('invalid memory notes');
+  }
+  const dir = memoryDir(dataDir, char);
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const file = path.join(dir, NOTES_FILE);
+  const temp = path.join(dir, `.${NOTES_FILE}.${process.pid}.${Date.now()}.tmp`);
+  try {
+    fs.writeFileSync(temp, value, { mode: 0o600, flag: 'wx' });
+    fs.renameSync(temp, file);
+  } finally {
+    try { fs.unlinkSync(temp); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  }
+}
+
 function prune(d) {
   const out = {};
   for (const [k, v] of Object.entries(d)) if (Array.isArray(v) ? v.length : v) out[k] = v;
@@ -178,6 +204,8 @@ export function createMemory(dataDir, defaults = {}) {
   return {
     dir: char => memoryDir(dataDir, char),
     digest: (char, opts = {}) => digest(char, { dataDir, ...defaults, ...opts }),
+    readNotes: char => readNotes(dataDir, char),
+    saveNotes: (char, value) => saveNotes(dataDir, char, value),
     forget: char => forgetMemory(dataDir, char),
     forgetAll: () => forgetAllMemory(dataDir),
   };

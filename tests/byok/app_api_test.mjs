@@ -766,7 +766,7 @@ test('memory: the characters, one\'s digest (never its folder), forget', async (
   fs.writeFileSync(path.join(dir, 'log.md'), '- 2026-09-26 Reached level 6\n');
   assert.deepEqual(await r.api.memory(), { chars: ['Tavi-Testrealm'] });
   const m = await r.api.memory('Tavi-Testrealm');
-  assert.deepEqual(keysOf(m), ['char', 'digest', 'notes', 'updated']);
+  assert.deepEqual(keysOf(m), ['char', 'digest', 'notes', 'notesText', 'updated']);
   assert.equal(m.char, 'Tavi-Testrealm');
   assert.equal(typeof m.digest, 'string');
   assert.ok(!JSON.stringify(m).includes(r.dataDir), 'no folder path');

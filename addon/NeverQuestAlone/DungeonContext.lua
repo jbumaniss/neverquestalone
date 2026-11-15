@@ -32,7 +32,8 @@ function D.Lines()
 			lines[#lines + 1] = "My group role: " .. role
 		end
 	end
-	if not call(UnitIsPlayer, "target") then
+	local isPlayer = call(UnitIsPlayer, "target")
+	if not ns.IsSecret(isPlayer) and not isPlayer then
 		local target = ns.Readable(call(UnitName, "target"))
 		local level = call(UnitLevel, "target")
 		local classification = call(UnitClassification, "target")

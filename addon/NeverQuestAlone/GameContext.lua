@@ -65,8 +65,9 @@ end
 
 local function questie(lines, Try)
 	-- Public Questie objective marker: advisory context only, no quest automation.
-	if ns.Integrations and not Try(UnitIsPlayer, "target") then
-		local guid = Try(UnitGUID, "target")
+	local isPlayer = Try(UnitIsPlayer, "target")
+	if ns.Integrations and not ns.IsSecret(isPlayer) and not isPlayer then
+		local guid = ns.Readable(Try(UnitGUID, "target"))
 		if ns.Integrations.QuestieTargetObjective(guid) then
 			local targetName = ns.Readable(Try(UnitName, "target"))
 			if targetName then table.insert(lines, "Questie: target " .. targetName .. " is marked as a quest objective") end

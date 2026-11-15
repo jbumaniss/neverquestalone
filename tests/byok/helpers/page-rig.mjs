@@ -64,7 +64,7 @@ export async function pageRig({ state = {}, onboarded = true, welcome = false, h
     shellLog: () => [],
     log: () => {},
   };
-  const subs = { status: [], navigate: [], updates: [], agreed: [] };
+  const subs = { status: [], navigate: [], updates: [], agreed: [], voiceHotkey: [] };
   // main's onAgreed (DU-03): the player agreed in a dialog, so the page may say "Checking with …".
   ctx.onAgreed = (call, provider) => { for (const cb of subs.agreed) cb({ call, provider: provider ?? null }); };
   const ipc = createIpc(ctx);
@@ -75,6 +75,7 @@ export async function pageRig({ state = {}, onboarded = true, welcome = false, h
   bones.onNavigate = cb => { subs.navigate.push(cb); return () => {}; };
   bones.onUpdates = cb => { subs.updates.push(cb); return () => {}; };
   bones.onAgreed = cb => { subs.agreed.push(cb); return () => {}; };
+  bones.onVoiceHotkey = cb => { subs.voiceHotkey.push(cb); return () => {}; };
   const page = loadPage(bones, { hash });
   await page.settle(30);
   /** Push the mock's status to the page, like main does on api.onChange. */

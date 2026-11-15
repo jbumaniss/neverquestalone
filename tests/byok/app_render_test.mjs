@@ -79,7 +79,7 @@ test('index.html: a CSP meta with no inline script, no remote anything, and no i
   assert.doesNotMatch(m[1], /unsafe-inline|unsafe-eval|unsafe-hashes|wasm-unsafe|https?:|data:|blob:|file:|'self'|\*/);
   assert.ok(html.indexOf('Content-Security-Policy') < html.indexOf('<script'), 'CSP comes before any script');
   const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)];
-  assert.equal(scripts.length, 3, 'strings.js, format.js, app.js');
+  assert.deepEqual(scripts.map(s => /src="([a-z]+\.js)"/.exec(s[1])?.[1]), ['strings.js', 'format.js', 'voice.js', 'app.js']);
   for (const s of scripts) {
     assert.match(s[1], /src="[a-z]+\.js"/, 'every script is a local file');
     assert.equal(s[2].trim(), '', 'no inline script');
@@ -111,7 +111,10 @@ test('main.mjs hardens the window: isolation, sandbox, no Node, no spellcheck, n
     /nodeIntegrationInSubFrames:\s*false/, /webviewTag:\s*false/, /spellcheck:\s*false/, /webSecurity:\s*true/,
     /allowRunningInsecureContent:\s*false/, /app\.enableSandbox\(\)/, /setWindowOpenHandler\(\(\)\s*=>\s*\(\{\s*action:\s*'deny'\s*\}\)\)/,
     /on\('will-navigate',\s*e\s*=>\s*e\.preventDefault\(\)\)/, /on\('will-attach-webview',\s*e\s*=>\s*e\.preventDefault\(\)\)/,
-    /setPermissionRequestHandler\(\(_wc,\s*_perm,\s*cb\)\s*=>\s*cb\(false\)\)/, /setSpellCheckerEnabled\(false\)/,
+    /setPermissionRequestHandler\(\(wc,\s*perm,\s*cb\)\s*=>\s*cb\(micAllowed\(wc,\s*perm\)\)\)/,
+    /setPermissionCheckHandler\(\(wc,\s*perm\)\s*=>\s*micAllowed\(wc,\s*perm\)\)/,
+    /perm === 'media'/, /wc === win\.webContents/, /Date\.now\(\) < microphoneArmedUntil/,
+    /setSpellCheckerEnabled\(false\)/,
     /requestSingleInstanceLock\(\)/, /loadURL\(pageUrl\(page\)\)/, /protocol\.handle\(SCHEME,/, /installShellGuard\(/, /UPDATER_PARTITION/, /process\.report\.excludeEnv\s*=\s*true/,
   ]) assert.match(src, re, `main.mjs: ${re}`);
   assert.doesNotMatch(src, /loadURL\(\s*['"`]https?:/, 'no remote content');
@@ -1441,7 +1444,7 @@ test('Show more (Settings), Diagnostics, About with its updates: what protects y
   // and the three pages (CL-words-76, CL-design-59); no lines under them: labels and buttons say it.
   const m = await pageRig({ state: READY, hash: 'settings' });
   await m.press(fk(m, 'more'));
-  assert.deepEqual(m.document.querySelectorAll('#more-box .set-key').map(e => e.textContent), ['Chat history', 'Memory', 'Replies in chat frame', 'Run setup again', 'Diagnostics', 'About', 'Uninstall']);
+  assert.deepEqual(m.document.querySelectorAll('#more-box .set-key').map(e => e.textContent), ['Chat history', 'Character memories', 'Voice conversation', 'Memory', 'Replies in chat frame', 'Run setup again', 'Diagnostics', 'About', 'Uninstall']);
   assert.deepEqual(m.document.querySelectorAll('#more-box .set-sub').length, 0, 'no lines');
   assert.deepEqual(m.document.querySelectorAll('#history-row button').map(label), ['Delete all']);
   assert.ok(m.document.getElementById('history-row').contains(m.document.getElementById('retention-days')), 'the days kept, beside it');

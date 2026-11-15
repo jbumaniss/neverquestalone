@@ -779,7 +779,7 @@ window.BonesStrings = {
       // words, the app trim); the whole of it is in Show details (screenSheet*).
       screenLabel: 'Screen reading',
       screenOnLine: 'Reads only the top of WoW’s window.',
-      screenOnLineWin: 'Reads the top of WoW’s window. Brief colored pixels in the top-left are the addon’s visible data signal, not a graphics failure. Turn this off to hide them; messages then wait for /reload.',
+      screenOnLineWin: 'Colored pixels carry screen data; off requires /reload.',
       screenOffLine: 'Off: your messages wait for a /reload.',
       screenAddonOffLine: 'Off in the addon’s Settings, under What {name} Knows.', // on here, off in game: a warning line (APP-D-48, SRS-W-05)
       screenSheetLabel: 'On your screen',

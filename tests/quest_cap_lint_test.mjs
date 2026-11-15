@@ -72,7 +72,7 @@ test('quest caps: MAX_QUESTS (a stale 25 on WoW: Forever, whose log holds 40) is
   assert.deepEqual(found, []);
   const store = fs.readFileSync(path.join(ROOT, 'addon/NeverQuestAlone/Store.lua'), 'utf8');
   assert.match(store, /function ns\.QuestLogMax\(/);
-  for (const file of ['addon/NeverQuestAlone/QoL.lua', 'addon/NeverQuestAlone/Chats.lua', 'addon/NeverQuestAlone/Companion.lua', 'addon/NeverQuestAlone/Map.lua']) {
+  for (const file of ['addon/NeverQuestAlone/QoL.lua', 'addon/NeverQuestAlone/GameContext.lua', 'addon/NeverQuestAlone/Companion.lua', 'addon/NeverQuestAlone/Map.lua']) {
     assert.match(fs.readFileSync(path.join(ROOT, file), 'utf8'), /ns\.QuestLog(Max)?\(/, `${file} reads the log or its cap through Store.lua`);
   }
 });

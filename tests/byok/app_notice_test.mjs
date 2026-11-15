@@ -174,7 +174,7 @@ test('the window: a switch is a plain notice with Okay; a retired model is the s
   const strings = fs.readFileSync(path.join(APP, 'renderer', 'strings.js'), 'utf8');
   assert.match(strings, /modelRetired: \{\n\s*headline: 'Your model was retired\.',\n\s*detail: 'Pick another to keep playing\.',\n\s*pickModelBtn: 'Pick another model',/);
   assert.doesNotMatch(card, /'Okay'/, 'no Okay while the state holds');
-  assert.doesNotMatch(app, /setTimeout|setInterval/, 'nothing in the window runs on a timer');
+  assert.doesNotMatch(fn + card, /setTimeout|setInterval/, 'notices and model cards do not use timers; opt-in voice reply polling is separate');
   // A push is drawn by applyStatus (the bar and the banners first), unless it's the same status
   // again or a press is under way (DU-02: then it's drawn once the click has run).
   const onStatus = /B\.onStatus\(function \(s\) \{([\s\S]*?)\n  \}\);/.exec(app)[1];

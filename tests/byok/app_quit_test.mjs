@@ -227,7 +227,7 @@ test('quit (fix-102): main wires it: no stop in before-quit, the tray goes and t
   // quit-race: still running after exit, nothing comes back; main never asks the holder to boot again.
   assert.doesNotMatch(flowSrc, /onExitFailed/);
   assert.doesNotMatch(main, /\.reboot\(/);
-  assert.match(main, /live = createLiveApi\(\{\s*boot: [^\n]*\n\s*log: holderLog,/, 'a self-test says a start after the commit (scripts/self-test.mjs fails it)');
+  assert.match(main, /live = createLiveApi\(\{\s*boot: \(\) => loadApi\(\{[\s\S]*?bootOptions: \{ chatgpt: \(\) => chatgpt \} \}\),\s*log: holderLog,/, 'a self-test says a start after the commit (scripts/self-test.mjs fails it)');
   assert.match(main, /function openWindow\(page\) \{\n[^\n]*\n  if \(quit\.committed\(\)\) return null;/);
   assert.match(main, /live = createLiveApi\(\{\s*boot: \(\) => loadApi\(/);
   assert.match(main, /api = SELF_TEST \? withHostileRequest\(live\.api\) : live\.api;/);

@@ -43,6 +43,9 @@ test('memory: personal notes survive reloads and logbook updates without changin
   assert.match(fs.readFileSync(path.join(memoryDir(dataDir, CHAR), FILES.character), 'utf8'), /nqa:facts:start/);
   assert.throws(() => mem.saveNotes(CHAR, 'x'.repeat(4_001)), /invalid memory notes/);
   assert.equal(mem.readNotes(CHAR).includes('Prefer stealth'), true);
+  mem.saveNotes(CHAR, '');
+  assert.equal(createMemory(dataDir).readNotes(CHAR), '', 'clearing the notes leaves the character folder intact');
+  assert.match(fs.readFileSync(path.join(memoryDir(dataDir, CHAR), FILES.character), 'utf8'), /nqa:facts:start/);
   mem.forget(CHAR);
   assert.equal(mem.readNotes(CHAR), '');
 });
